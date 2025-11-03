@@ -38,7 +38,7 @@ import re
 from pathlib import Path
 import src.constants as const
 from src.eval.components.fixed_velocity_command import FixedVelocityCommand, FixedVelocityCommandCfg
-from src import get_logger
+from src import GIT_COMMIT, get_logger
 
 logger = get_logger()
 
@@ -92,7 +92,7 @@ def main():
     obs: torch.Tensor = observations["policy"]  # type: ignore
 
     # format difficulty and speed without decimal points
-    log_name = f"gaitnet_eval_d{args_cli.difficulty}_v{args_cli.velocity}.csv"
+    log_name = f"gaitnet_eval_d{args_cli.difficulty}_v{args_cli.velocity}_commit{GIT_COMMIT}.csv"
     evaluator = Evaluator(env, observations, trials=args_cli.trials, name=log_name)
 
     with torch.inference_mode():
