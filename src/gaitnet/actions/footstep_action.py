@@ -18,15 +18,21 @@ from src import get_logger, PROJECT_ROOT
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from src.gaitnet.components.gaitnet_observation_manager import GaitNetObservationManager
+    from src.gaitnet.components.gaitnet_observation_manager import (
+        GaitNetObservationManager,
+    )
 
 logger = get_logger()
 
 NO_STEP = -1  # special value for no step
 
-if const.experiments.contact_schedule_logging or const.experiments.swing_duration_logging:
+if (
+    const.experiments.contact_schedule_logging
+    or const.experiments.swing_duration_logging
+):
     # try to grab "--difficulty" and "--velocity" from command line args
     import argparse
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--difficulty", type=float, default=0.0)
     parser.add_argument("--velocity", type=float, default=0.0)
@@ -35,13 +41,19 @@ if const.experiments.contact_schedule_logging or const.experiments.swing_duratio
     if const.experiments.contact_schedule_logging:
         contact_schedule_log_folder = PROJECT_ROOT / "data" / "contact_schedule"
         contact_schedule_log_folder.mkdir(parents=True, exist_ok=True)
-        contact_schedule_log_path = contact_schedule_log_folder / f"contact_schedule_log_d{args.difficulty}_v{args.velocity}.csv"
+        contact_schedule_log_path = (
+            contact_schedule_log_folder
+            / f"contact_schedule_log_d{args.difficulty}_v{args.velocity}.csv"
+        )
         contact_schedule_log = open(contact_schedule_log_path, "w")
 
     if const.experiments.swing_duration_logging:
         swing_duration_log_folder = PROJECT_ROOT / "data" / "swing_duration"
         swing_duration_log_folder.mkdir(parents=True, exist_ok=True)
-        swing_duration_log_path = swing_duration_log_folder / f"swing_duration_log_d{args.difficulty}_v{args.velocity}.csv"
+        swing_duration_log_path = (
+            swing_duration_log_folder
+            / f"swing_duration_log_d{args.difficulty}_v{args.velocity}.csv"
+        )
         swing_duration_log = open(swing_duration_log_path, "a")
 
 
@@ -65,7 +77,7 @@ class FSCActionTerm(ActionTerm):
             (self.num_envs, self.action_dim), device=self.device
         )
         self._processed_actions = self._raw_actions
-    
+
     def _get_option_manager(self) -> "GaitNetObservationManager":
         """Get the footstep option manager.
 
@@ -80,7 +92,7 @@ class FSCActionTerm(ActionTerm):
     @property
     def action_dim(self) -> int:
         """Dimension of the action term.
-        
+
         Returns 2: action index (0-16) and duration value.
         """
         return 2  # Action index + duration
@@ -132,26 +144,28 @@ class FSCActionTerm(ActionTerm):
         # Extract action indices and durations
         action_indices = actions[:, 0].long()  # (num_envs,)
         durations = actions[:, 1]  # (num_envs,)
-        
+
         # Get the footstep options from the observation manager
         footstep_option_manager: "GaitNetObservationManager" = (
             self._get_option_manager()
         )
-        all_options = footstep_option_manager.footstep_options  # (num_envs, 17, 4) - last column is cost
-        
+        all_options = (
+            footstep_option_manager.footstep_options
+        )  # (num_envs, 17, 4) - last column is cost
+
         # Use proper indexing to select the options (leg, x, y, cost)
         batch_size = action_indices.shape[0]
         batch_indices = torch.arange(batch_size, device=self.device)
-        
+
         # Gather the selected options (leg, x, y, cost)
         selected_options = all_options[batch_indices, action_indices]  # (num_envs, 4)
-        
+
         # Replace the cost (column 3) with the duration from the policy
         selected_actions = selected_options.clone()
         selected_actions[:, 3] = durations
-        
+
         return selected_actions  # (num_envs, 4) - (leg, x, y, duration)
-    
+
     @staticmethod
     def log_actions(processed_actions: np.ndarray):
         """Log the processed actions to files if logging is enabled.
@@ -161,14 +175,20 @@ class FSCActionTerm(ActionTerm):
         """
         if const.experiments.contact_schedule_logging:
             action = processed_actions[0]
-            contact_schedule_log.write(f"{action[0]},{action[1]},{action[2]},{action[3]}\n")
+            contact_schedule_log.write(
+                f"{action[0]},{action[1]},{action[2]},{action[3]}\n"
+            )
             contact_schedule_log.flush()
 
         if const.experiments.swing_duration_logging:
-            swing_durations = processed_actions[:, 3]
             # filter by valid steps
-            valid_swing_durations = swing_durations[processed_actions[:, 0] != NO_STEP]
-            swing_duration_log.writelines([f"{d}\n" for d in valid_swing_durations])
+            valid_swing_mask = processed_actions[:, 0] != NO_STEP
+            valid_swing_durations = processed_actions[valid_swing_mask][:, 3]
+            valid_swing_legs = processed_actions[valid_swing_mask][:, 0]
+
+            swing_duration_log.writelines(
+                [f"{l},{d}\n" for l, d in zip(valid_swing_legs, valid_swing_durations)]
+            )
             swing_duration_log.flush()
 
     def process_actions(self, actions: torch.Tensor):
@@ -184,7 +204,7 @@ class FSCActionTerm(ActionTerm):
         """
         # Store raw actions
         self._raw_actions = actions
-        
+
         # Convert actions (index + duration) to footstep actions (leg, x, y, duration)
         self._processed_actions = self.action_indices_to_actions(actions)
         processed_actions_cpu = self.processed_actions.cpu().numpy()
@@ -195,7 +215,7 @@ class FSCActionTerm(ActionTerm):
         # ablate swing duration if specified
         if const.experiments.ablate_swing_duration:
             processed_actions_cpu[:, 3] = const.experiments.constant_swing_duration
-        
+
         # mask out invalid steps
         mask = processed_actions_cpu[:, 0] != NO_STEP
         footstep_parameters = self.footstep_kwargs(processed_actions_cpu)
