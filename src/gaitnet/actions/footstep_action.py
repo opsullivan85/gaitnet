@@ -187,7 +187,7 @@ class FSCActionTerm(ActionTerm):
             valid_swing_legs = processed_actions[valid_swing_mask][:, 0]
 
             swing_duration_log.writelines(
-                [f"{l},{d}\n" for l, d in zip(valid_swing_legs, valid_swing_durations)]
+                [f"{d},{l}\n" for l, d in zip(valid_swing_legs, valid_swing_durations)]
             )
             swing_duration_log.flush()
 
