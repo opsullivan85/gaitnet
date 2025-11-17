@@ -1,4 +1,5 @@
 import logging
+import subprocess
 import sys
 from pathlib import Path
 from datetime import datetime
@@ -6,6 +7,13 @@ import inspect
 
 # Define project root (adjust if needed)
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
+try:
+    GIT_COMMIT = subprocess.check_output(
+        ['git', '-C', str(PROJECT_ROOT), 'rev-parse', '--short', 'HEAD']
+    ).decode('ascii').strip()
+except Exception:
+    GIT_COMMIT = "unknown"
 
 
 class ProjectRelativeFormatter(logging.Formatter):

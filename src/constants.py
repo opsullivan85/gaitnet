@@ -90,6 +90,23 @@ class _FootstepScanner:
 footstep_scanner = _FootstepScanner()
 """Footstep scanner constants"""
 
+@dataclass(frozen=True)
+class _Experiments:
+    ablate_footstep_cost: bool = False
+    """If true, zero out footstep costs in footstep candidate sampler for ablation study."""
+    ablate_swing_duration: bool = True
+    """If true, set all swing durations to a constant value for ablation study."""
+    constant_swing_duration: float = 0.247
+    """Constant swing duration to use if ablate_swing_duration is True."""
+    swing_duration_logging: bool = False
+    """If true, log swing duration statistics."""
+    contact_schedule_logging: bool = False
+    """If true, log contact schedule statistics, only for first robot."""
+
+
+experiments = _Experiments()
+"""Experiment constants"""
+
 
 ##### Checks
 

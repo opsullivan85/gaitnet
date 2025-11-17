@@ -1,6 +1,3 @@
-from typing import Any
-from tensorflow.python import checkpoint
-import torch
 from isaaclab.app import AppLauncher
 import argparse
 
@@ -32,29 +29,21 @@ parser.add_argument(
 # append AppLauncher cli args
 AppLauncher.add_app_launcher_args(parser)
 # parse the arguments
-args_cli = parser.parse_args()
+args_cli, unused_args = parser.parse_known_args()
 
 # launch omniverse app
 app_launcher = AppLauncher(args_cli)
 simulation_app = app_launcher.app
 
-import multiprocessing
-import signal
-import datetime
-import os
+import torch
 from src.gaitnet.util import get_checkpoint_path
-from isaaclab_rl.rsl_rl import RslRlVecEnvWrapper  # type: ignore
 from src.gaitnet.components.gaitnet_env import GaitNetEnv
-import src.simulation.cfg.footstep_scanner_constants as fs
-from rsl_rl.runners import on_policy_runner
-import rsl_rl.modules
 from src.gaitnet.env_cfg.gaitnet_env_cfg import get_env
 from src.util import log_exceptions
-from src.gaitnet import actions, gaitnet
+from src.gaitnet import gaitnet
 import re
 from pathlib import Path
 import src.constants as const
-from src.util.timer import Timer
 from src import get_logger
 from src import PROJECT_ROOT
 
@@ -107,8 +96,7 @@ def main():
         device=args_cli.device,
         manager_class=GaitNetEnv,
     )
-    obs_, info = env.reset()
-    obs: torch.Tensor = obs_["policy"]  # type: ignore
+    obs, info = env.reset()
 
     with torch.inference_mode():
         while True:
@@ -117,9 +105,7 @@ def main():
             if not deterministic:
                 actions = model.act(obs)
             log_action(actions, env)
-            obs_, rew, terminated, truncated, info = env.step(actions)
-            # coerce type system
-            obs = obs_["policy"]  # type: ignore
+            obs, rew, terminated, truncated, info = env.step(actions)
 
 
 if __name__ == "__main__":

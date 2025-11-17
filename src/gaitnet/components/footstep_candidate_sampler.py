@@ -278,4 +278,8 @@ class FootstepCandidateSampler:
         result = torch.cat([best_options, best_values.unsqueeze(-1)], dim=-1)
         # (num_envs, num_options, 4) where each option is (leg, dx, dy, cost)
 
+        # zero out cost for ablation study
+        if const.experiments.ablate_footstep_cost:
+            result[:, :, 3] = 0.0
+
         return result
