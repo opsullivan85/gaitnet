@@ -92,9 +92,11 @@ footstep_scanner = _FootstepScanner()
 
 @dataclass(frozen=True)
 class _Experiments:
-    ablate_footstep_cost: bool = False
+    random_footstep_sampling: bool = True
+    """If true, sample footstep options randomly instead of using contactnet's cost estimate for sampling."""
+    ablate_footstep_cost: bool = True
     """If true, zero out footstep costs in footstep candidate sampler for ablation study."""
-    ablate_swing_duration: bool = True
+    ablate_swing_duration: bool = False
     """If true, set all swing durations to a constant value for ablation study."""
     constant_swing_duration: float = 0.247
     """Constant swing duration to use if ablate_swing_duration is True."""
@@ -121,4 +123,10 @@ assert np.all(
 if np.any(np.mod(contact_net.grid_size, footstep_scanner.grid_size) != 0):
     logger.warning(
         "ContactNet and Footstep scanner grid sizes should probably be multiples of each other"
+    )
+
+if experiments.random_footstep_sampling:
+    assert experiments.ablate_footstep_cost, (
+        "If random footstep sampling is enabled, "
+        "then ablate_footstep_cost must also be enabled."
     )
