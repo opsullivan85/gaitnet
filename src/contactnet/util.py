@@ -1,5 +1,5 @@
 from pathlib import Path
-from src import PROJECT_ROOT
+from gaitnet import PROJECT_ROOT
 import argparse
 
 parser = argparse.ArgumentParser(description="ContactNet Utilities")

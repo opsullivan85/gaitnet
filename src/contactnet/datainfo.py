@@ -2,11 +2,11 @@ import argparse
 import pickle
 
 import numpy as np
-from src import PROJECT_ROOT, logger
-from src.contactnet.debug import view_footstep_cost_map
-from src.contactnet.tree import StepNode
-import src.simulation.cfg.footstep_scanner_constants as fs
-from src.contactnet.util import get_dataset_paths
+from gaitnet import PROJECT_ROOT, logger
+from gaitnet.contactnet.debug import view_footstep_cost_map
+from gaitnet.contactnet.tree import StepNode
+import gaitnet.simulation.cfg.footstep_scanner_constants as fs
+from gaitnet.contactnet.util import get_dataset_paths
 import matplotlib.pyplot as plt
 from matplotlib import colors
 
@@ -131,6 +131,6 @@ def main():
         generate_footstep_placement_maps()
 
 if __name__ == "__main__":
-    from src.util import log_exceptions
+    from gaitnet.util import log_exceptions
     with log_exceptions(logger):
         main()

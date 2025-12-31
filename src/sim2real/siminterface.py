@@ -3,14 +3,14 @@ import numpy as np
 from nptyping import Float32, NDArray, Shape, Bool
 
 try:
-    from src.control import RobotRunnerMin, RobotType
+    from gaitnet.control import RobotRunnerMin, RobotType
 except ImportError as e:
     raise ImportError(
         "Failed to import from src.control. Make sure the control module is correctly installed."
     ) from e
-from src.sim2real.abstractinterface import Sim2RealInterface
+from gaitnet.sim2real.abstractinterface import Sim2RealInterface
 import logging
-from src import get_logger
+from gaitnet import get_logger
 logger = get_logger()
 
 

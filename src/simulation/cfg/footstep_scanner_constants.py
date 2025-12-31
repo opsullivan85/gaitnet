@@ -3,7 +3,7 @@
 Does not require starting IsaacGym, so can be imported in other places
 """
 import torch
-import src.constants as const
+import gaitnet.constants as const
 
 # TODO: remove all references to these with const.footstep_scanner...
 _depricated_grid_resolution: float = const.footstep_scanner.grid_resolution

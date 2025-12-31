@@ -8,11 +8,11 @@ from isaaclab.managers import ActionTerm, ActionTermCfg
 from isaaclab.utils import configclass
 import torch
 
-from src import sim2real
-from src.util import VectorPool
-from src.simulation.util import controls_to_joint_efforts
+from gaitnet import sim2real
+from gaitnet.util import VectorPool
+from gaitnet.simulation.util import controls_to_joint_efforts
 import numpy as np
-from src import get_logger
+from gaitnet import get_logger
 
 logger = get_logger()
 

@@ -2,13 +2,13 @@ from pathlib import Path
 from typing import Any, TypeAlias
 import numpy as np
 import torch
-from src import timestamp, PROJECT_ROOT
+from gaitnet import timestamp, PROJECT_ROOT
 import atexit
 from time import time
 import matplotlib.pyplot as plt
 from datetime import datetime
 
-from src import get_logger
+from gaitnet import get_logger
 
 logger = get_logger()
 

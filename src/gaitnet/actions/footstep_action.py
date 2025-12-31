@@ -8,17 +8,17 @@ from isaaclab.managers import ActionTerm, ActionTermCfg
 from isaaclab.utils import configclass
 import torch
 
-from src import sim2real
-from src.util import VectorPool
-from src.simulation.util import controls_to_joint_efforts
+from gaitnet import sim2real
+from gaitnet.util import VectorPool
+from gaitnet.simulation.util import controls_to_joint_efforts
 import numpy as np
-import src.constants as const
-from src import get_logger, PROJECT_ROOT
+import gaitnet.constants as const
+from gaitnet import get_logger, PROJECT_ROOT
 
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from src.gaitnet.components.gaitnet_observation_manager import (
+    from gaitnet.gaitnet.components.gaitnet_observation_manager import (
         GaitNetObservationManager,
     )
 

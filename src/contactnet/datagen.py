@@ -38,8 +38,8 @@ simulation_app = app_launcher.app
 import signal
 import multiprocessing
 import subprocess
-from src import PROJECT_ROOT, timestamp
-import src.simulation.cfg.footstep_scanner_constants as fs
+from gaitnet import PROJECT_ROOT, timestamp
+import gaitnet.simulation.cfg.footstep_scanner_constants as fs
 
 import numpy as np
 import torch
@@ -49,19 +49,19 @@ from isaaclab.envs import ManagerBasedEnv
 from isaaclab.envs.mdp import rewards
 import itertools
 
-import src.contactnet.costs as cn_costs
-from src.sim2real import SimInterface
-from src.simulation.util import controls_to_joint_efforts, reset_all_to
-from src.util import VectorPool
-from src.simulation.cfg.quadrupedenv import QuadrupedEnvCfg, get_quadruped_env_cfg
-from src.contactnet.debug import (
+import gaitnet.contactnet.costs as cn_costs
+from gaitnet.sim2real import SimInterface
+from gaitnet.simulation.util import controls_to_joint_efforts, reset_all_to
+from gaitnet.util import VectorPool
+from gaitnet.simulation.cfg.quadrupedenv import QuadrupedEnvCfg, get_quadruped_env_cfg
+from gaitnet.contactnet.debug import (
     view_footstep_cost_map,
     view_multiple_footstep_cost_maps,
 )
-from src.contactnet import tree
+from gaitnet.contactnet import tree
 from nptyping import Float32, NDArray, Shape, Bool
 import pickle
-from src import get_logger
+from gaitnet import get_logger
 
 logger = get_logger()
 
@@ -645,7 +645,7 @@ def dfs_debug():
 
 
 if __name__ == "__main__":
-    from src.util import log_exceptions
+    from gaitnet.util import log_exceptions
 
     with log_exceptions(logger):
         main()

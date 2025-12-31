@@ -9,9 +9,9 @@ from types import SimpleNamespace
 import numpy as np
 from nptyping import Float32, NDArray, Shape
 
-import src.sim2real.siminterface as SimInterface
-from src.util import VectorPool
-from src.simulation.util import (
+import gaitnet.sim2real.siminterface as SimInterface
+from gaitnet.util import VectorPool
+from gaitnet.simulation.util import (
     interface_to_isaac_torques,
     isaac_body_to_interface,
     isaac_joints_to_interface,

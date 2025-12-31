@@ -1,6 +1,6 @@
 import os
 import sys
-from src import PROJECT_ROOT, get_logger
+from gaitnet import PROJECT_ROOT, get_logger
 import subprocess
 import itertools
 import signal

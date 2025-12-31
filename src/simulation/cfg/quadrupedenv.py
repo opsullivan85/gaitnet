@@ -2,19 +2,19 @@
 from isaaclab.envs import ManagerBasedRLEnvCfg  # type: ignore
 from isaaclab.utils import configclass  # type: ignore
 
-from src.sim2real import SimInterface
-from src.util import VectorPool
-from src.simulation.cfg.manager_components import (
+from gaitnet.sim2real import SimInterface
+from gaitnet.util import VectorPool
+from gaitnet.simulation.cfg.manager_components import (
     ActionsCfg,
     EventsCfg,
     ObservationsCfg,
     RewardsCfg,
     TerminationsCfg,
 )
-from src.simulation.cfg.scene import SceneCfg
+from gaitnet.simulation.cfg.scene import SceneCfg
 import numpy as np
 
-from src import get_logger
+from gaitnet import get_logger
 logger = get_logger()
 
 

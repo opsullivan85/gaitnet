@@ -1,8 +1,8 @@
 import numpy as np
 import torch
 from isaaclab.envs import ManagerBasedRLEnv
-from src.sim2real import SimInterface
-from src.util.vectorpool import VectorPool
+from gaitnet.sim2real import SimInterface
+from gaitnet.util.vectorpool import VectorPool
 
 
 def reset_controller(env: ManagerBasedRLEnv, env_ids: torch.Tensor) -> None:

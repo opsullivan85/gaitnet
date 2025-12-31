@@ -4,9 +4,9 @@ import torch.nn as nn
 
 from typing import Sequence
 from rsl_rl.modules import ActorCritic
-from src import get_logger
+from gaitnet import get_logger
 from torch.distributions import Normal, Categorical
-import src.constants as const
+import gaitnet.constants as const
 
 logger = get_logger()
 

@@ -1,13 +1,13 @@
 import torch
 import torch.nn as nn
 import numpy as np
-from src.contactnet.contactnet import FootstepDataset, ContactNet
-from src.contactnet.debug import view_footstep_cost_map
+from gaitnet.contactnet.contactnet import FootstepDataset, ContactNet
+from gaitnet.contactnet.debug import view_footstep_cost_map
 import argparse
 import time
 
-from src.contactnet.util import get_checkpoint_path, get_dataset_paths
-from src import get_logger
+from gaitnet.contactnet.util import get_checkpoint_path, get_dataset_paths
+from gaitnet import get_logger
 
 logger = get_logger()
 
@@ -140,7 +140,7 @@ def main():
 
 
 if __name__ == "__main__":
-    from src.util import log_exceptions
+    from gaitnet.util import log_exceptions
 
     with log_exceptions(logger):
         main()

@@ -27,20 +27,20 @@ app_launcher = AppLauncher(args_cli)
 simulation_app = app_launcher.app
 
 import torch
-from src.eval.components.contactnet_env import ContactNetEnv
-from src.eval.evaluator import Evaluator
-from src.gaitnet.util import get_checkpoint_path
+from gaitnet.eval.components.contactnet_env import ContactNetEnv
+from gaitnet.eval.evaluator import Evaluator
+from gaitnet.gaitnet.util import get_checkpoint_path
 from isaaclab.terrains import TerrainGeneratorCfg
-from src.gaitnet.components.gaitnet_env import GaitNetEnv
-from src.gaitnet.env_cfg.gaitnet_env_cfg import get_env, get_env_cfg, update_controllers
-from src.util import log_exceptions
-from src.gaitnet import actions, gaitnet
+from gaitnet.gaitnet.components.gaitnet_env import GaitNetEnv
+from gaitnet.gaitnet.env_cfg.gaitnet_env_cfg import get_env, get_env_cfg, update_controllers
+from gaitnet.util import log_exceptions
+from gaitnet.gaitnet import actions, gaitnet
 import re
 from pathlib import Path
-import src.constants as const
-from src.eval.components.fixed_velocity_command import FixedVelocityCommand, FixedVelocityCommandCfg
-from src.gaitnet.env_cfg.observations import contact_state_indices
-from src import GIT_COMMIT, get_logger
+import gaitnet.constants as const
+from gaitnet.eval.components.fixed_velocity_command import FixedVelocityCommand, FixedVelocityCommandCfg
+from gaitnet.gaitnet.env_cfg.observations import contact_state_indices
+from gaitnet import GIT_COMMIT, get_logger
 
 logger = get_logger()
 

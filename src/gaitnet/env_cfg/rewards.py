@@ -5,8 +5,8 @@ from isaaclab.envs import ManagerBasedRLEnv, mdp
 import isaaclab_tasks.manager_based.locomotion.velocity.config.spot.mdp as spot_mdp  # type: ignore
 from isaaclab.managers import RewardTermCfg as RewTerm, SceneEntityCfg
 from isaaclab.utils import configclass
-from src.sim2real import Sim2RealInterface
-import src.constants as const
+from gaitnet.sim2real import Sim2RealInterface
+import gaitnet.constants as const
 
 
 def a_foot_in_swing(env: ManagerBasedRLEnv) -> torch.Tensor:

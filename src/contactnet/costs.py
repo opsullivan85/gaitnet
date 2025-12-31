@@ -3,12 +3,12 @@ from typing import Callable
 import numpy as np
 from isaaclab.envs import ManagerBasedEnv
 import torch
-from src.sim2real import SimInterface
-from src.util import VectorPool
+from gaitnet.sim2real import SimInterface
+from gaitnet.util import VectorPool
 from abc import abstractmethod, ABC
-from src.contactnet.debug import view_footstep_cost_map
-from src.util.math import quat_to_euler_torch
-import src.simulation.cfg.footstep_scanner_constants as fs
+from gaitnet.contactnet.debug import view_footstep_cost_map
+from gaitnet.util.math import quat_to_euler_torch
+import gaitnet.simulation.cfg.footstep_scanner_constants as fs
 
 
 class TerminalCost(ABC):

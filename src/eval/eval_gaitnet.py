@@ -26,24 +26,24 @@ app_launcher = AppLauncher(launcher_args=args_cli)
 simulation_app = app_launcher.app
 
 import torch
-from src.eval.evaluator import Evaluator
-from src.gaitnet.util import get_checkpoint_path
+from gaitnet.eval.evaluator import Evaluator
+from gaitnet.gaitnet.util import get_checkpoint_path
 from isaaclab.terrains import TerrainGeneratorCfg
-from src.gaitnet.components.gaitnet_env import GaitNetEnv, GaitNetObservationManager
-from src.gaitnet.env_cfg.gaitnet_env_cfg import get_env, get_env_cfg, update_controllers
-from src.util import log_exceptions
-from src.gaitnet import gaitnet
+from gaitnet.gaitnet.components.gaitnet_env import GaitNetEnv, GaitNetObservationManager
+from gaitnet.gaitnet.env_cfg.gaitnet_env_cfg import get_env, get_env_cfg, update_controllers
+from gaitnet.util import log_exceptions
+from gaitnet.gaitnet import gaitnet
 import re
 from pathlib import Path
-import src.constants as const
-from src.eval.components.fixed_velocity_command import (
+import gaitnet.constants as const
+from gaitnet.eval.components.fixed_velocity_command import (
     FixedVelocityCommand,
     FixedVelocityCommandCfg,
 )
-from src import GIT_COMMIT, get_logger
-from src.util.pga import generate_footstep_action
-from src.gaitnet.env_cfg.observations import get_terrain_mask
-from src.simulation.cfg.footstep_scanner_constants import xy_to_idx
+from gaitnet import GIT_COMMIT, get_logger
+from gaitnet.util.pga import generate_footstep_action
+from gaitnet.gaitnet.env_cfg.observations import get_terrain_mask
+from gaitnet.simulation.cfg.footstep_scanner_constants import xy_to_idx
 
 logger = get_logger()
 

@@ -3,19 +3,19 @@ from isaaclab.envs import ManagerBasedRLEnv, ManagerBasedRLEnvCfg
 from isaaclab.sensors import SensorBaseCfg
 from isaaclab.utils import configclass
 
-from src import sim2real
-from src.gaitnet.env_cfg.curriculum import CurriculumCfg
-from src.simulation.cfg.scene import SceneCfg
+from gaitnet import sim2real
+from gaitnet.gaitnet.env_cfg.curriculum import CurriculumCfg
+from gaitnet.simulation.cfg.scene import SceneCfg
 import numpy as np
 
-from src import get_logger
-from src.gaitnet.env_cfg.observations import ObservationsCfg
-from src.gaitnet.env_cfg.actions import ActionsCfg
-from src.gaitnet.env_cfg.events import EventsCfg
-from src.gaitnet.env_cfg.terminations import TerminationsCfg
-from src.gaitnet.env_cfg.rewards import RewardsCfg
-from src.gaitnet.env_cfg.commands import CommandsCfg
-from src.util import VectorPool
+from gaitnet import get_logger
+from gaitnet.gaitnet.env_cfg.observations import ObservationsCfg
+from gaitnet.gaitnet.env_cfg.actions import ActionsCfg
+from gaitnet.gaitnet.env_cfg.events import EventsCfg
+from gaitnet.gaitnet.env_cfg.terminations import TerminationsCfg
+from gaitnet.gaitnet.env_cfg.rewards import RewardsCfg
+from gaitnet.gaitnet.env_cfg.commands import CommandsCfg
+from gaitnet.util import VectorPool
 
 logger = get_logger()
 

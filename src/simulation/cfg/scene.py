@@ -4,14 +4,14 @@ from isaaclab.scene import InteractiveSceneCfg  # type: ignore
 from isaaclab.sensors import ContactSensorCfg, RayCasterCfg, FrameTransformerCfg  # type: ignore
 from isaaclab.utils import configclass  # type: ignore
 
-from src.simulation.cfg.footstep_scanner import (
+from gaitnet.simulation.cfg.footstep_scanner import (
     FL_FootstepScannerCfg,
     FR_FootstepScannerCfg,
     RL_FootstepScannerCfg,
     RR_FootstepScannerCfg,
 )
-from src.simulation.cfg.robot import ROBOT_CFG
-from src.simulation.cfg.terrain import VoidTerrainImporterCfg
+from gaitnet.simulation.cfg.robot import ROBOT_CFG
+from gaitnet.simulation.cfg.terrain import VoidTerrainImporterCfg
 
 import numpy as np
 

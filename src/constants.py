@@ -1,5 +1,5 @@
 import numpy as np
-from src import get_logger
+from gaitnet import get_logger
 from dataclasses import dataclass, field
 
 logger = get_logger()

@@ -2,7 +2,7 @@ from math import hypot, trunc
 import torch
 from isaaclab.assets import ArticulationData
 from isaaclab.envs import ManagerBasedRLEnv, VecEnvObs, VecEnvStepReturn
-from src import PROJECT_ROOT
+from gaitnet import PROJECT_ROOT
 import csv
 
 data_folder = PROJECT_ROOT / "data" / "evaluations"

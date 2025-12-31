@@ -7,18 +7,18 @@ from isaaclab.managers import SceneEntityCfg
 from isaaclab.sensors import ContactSensor, RayCaster
 from isaaclab.utils import configclass
 from isaaclab.utils.noise import AdditiveUniformNoiseCfg as Unoise
-from src.gaitnet.actions.mpc_action import ManagerBasedEnv
+from gaitnet.gaitnet.actions.mpc_action import ManagerBasedEnv
 from isaaclab.envs.utils.io_descriptors import (
     generic_io_descriptor,
     record_dtype,
     record_shape,
 )
 import torch.nn.functional as F
-from src.util.vectorpool import VectorPool
-from src.sim2real.abstractinterface import Sim2RealInterface
-from src import get_logger
-from src.util.data_logging import save_fig, save_img
-import src.constants as const
+from gaitnet.util.vectorpool import VectorPool
+from gaitnet.sim2real.abstractinterface import Sim2RealInterface
+from gaitnet import get_logger
+from gaitnet.util.data_logging import save_fig, save_img
+import gaitnet.constants as const
 
 logger = get_logger()
 

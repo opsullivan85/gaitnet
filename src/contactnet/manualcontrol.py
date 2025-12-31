@@ -3,10 +3,10 @@ from ast import mod
 import signal
 
 from isaaclab.app import AppLauncher
-from src.contactnet import tree
-from src.contactnet.datagen import check_dones, args
-from src.sim2real import SimInterface
-from src.simulation.util import controls_to_joint_efforts, reset_all_to
+from gaitnet.contactnet import tree
+from gaitnet.contactnet.datagen import check_dones, args
+from gaitnet.sim2real import SimInterface
+from gaitnet.simulation.util import controls_to_joint_efforts, reset_all_to
 
 # # add argparse arguments
 # parser = argparse.ArgumentParser(description="Manual robot control.")
@@ -31,17 +31,17 @@ import torch
 import torch.nn as nn
 
 from isaaclab.envs import ManagerBasedEnv
-import src
-from src import control
-from src.contactnet.debug import view_footstep_cost_map
-from src.contactnet.contactnet import FootstepDataset, ContactNet
-from src.contactnet.util import get_checkpoint_path, get_dataset_paths
-from src import get_logger
+import gaitnet
+from gaitnet import control
+from gaitnet.contactnet.debug import view_footstep_cost_map
+from gaitnet.contactnet.contactnet import FootstepDataset, ContactNet
+from gaitnet.contactnet.util import get_checkpoint_path, get_dataset_paths
+from gaitnet import get_logger
 import pickle
 
-from src.simulation.cfg.quadrupedenv import QuadrupedEnvCfg, get_quadruped_env_cfg
-import src.simulation.cfg.footstep_scanner_constants as fs
-from src.util import VectorPool
+from gaitnet.simulation.cfg.quadrupedenv import QuadrupedEnvCfg, get_quadruped_env_cfg
+import gaitnet.simulation.cfg.footstep_scanner_constants as fs
+from gaitnet.util import VectorPool
 
 logger = get_logger()
 
@@ -197,6 +197,6 @@ def main():
 
 
 if __name__ == "__main__":
-    from src.util import log_exceptions
+    from gaitnet.util import log_exceptions
     with log_exceptions(logger):
         main()

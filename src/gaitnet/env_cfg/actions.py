@@ -1,7 +1,7 @@
 from isaaclab.utils import configclass
-from src.gaitnet.actions.footstep_action import FSCActionCfg
-from src.gaitnet.actions.hierarchical_action import HierarchicalActionCfg
-from src.gaitnet.actions.mpc_action import MPCActionCfg, MPCControlActionCfg
+from gaitnet.gaitnet.actions.footstep_action import FSCActionCfg
+from gaitnet.gaitnet.actions.hierarchical_action import HierarchicalActionCfg
+from gaitnet.gaitnet.actions.mpc_action import MPCActionCfg, MPCControlActionCfg
 
 
 @configclass

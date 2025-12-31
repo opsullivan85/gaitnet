@@ -36,16 +36,16 @@ app_launcher = AppLauncher(args_cli)
 simulation_app = app_launcher.app
 
 import torch
-from src.gaitnet.util import get_checkpoint_path
-from src.gaitnet.components.gaitnet_env import GaitNetEnv
-from src.gaitnet.env_cfg.gaitnet_env_cfg import get_env
-from src.util import log_exceptions
-from src.gaitnet import gaitnet
+from gaitnet.gaitnet.util import get_checkpoint_path
+from gaitnet.gaitnet.components.gaitnet_env import GaitNetEnv
+from gaitnet.gaitnet.env_cfg.gaitnet_env_cfg import get_env
+from gaitnet.util import log_exceptions
+from gaitnet.gaitnet import gaitnet
 import re
 from pathlib import Path
-import src.constants as const
-from src import get_logger
-from src import PROJECT_ROOT
+import gaitnet.constants as const
+from gaitnet import get_logger
+from gaitnet import PROJECT_ROOT
 
 data_path = PROJECT_ROOT / "data" / "contact_schedule" / "contact_schedule.csv"
 data_path.parent.mkdir(parents=True, exist_ok=True)

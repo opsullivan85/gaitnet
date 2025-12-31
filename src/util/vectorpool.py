@@ -9,7 +9,7 @@ from nptyping import NDArray, Shape, Bool, Number
 
 import enum
 
-from src import get_logger
+from gaitnet import get_logger
 logger = get_logger()
 
 

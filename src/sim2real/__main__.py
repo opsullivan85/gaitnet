@@ -1,7 +1,7 @@
 
-from src.util import log_exceptions
+from gaitnet.util import log_exceptions
 
-from src import get_logger
+from gaitnet import get_logger
 logger = get_logger()
 
 
@@ -10,7 +10,7 @@ def main():
     print("Hello, RobotInterface!")
     import numpy as np
 
-    from src.sim2real import SimInterface
+    from gaitnet.sim2real import SimInterface
 
     sim_interface = SimInterface(dt=0.01, debug_logging=True)
 
@@ -29,6 +29,6 @@ def main():
 
 
 if __name__ == "__main__":
-    from src.util import log_exceptions
+    from gaitnet.util import log_exceptions
     with log_exceptions(logger):
         main()

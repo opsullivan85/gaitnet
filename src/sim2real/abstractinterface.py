@@ -3,7 +3,7 @@ from abc import ABC, abstractmethod
 import numpy as np
 from nptyping import Float32, NDArray, Shape, Bool
 
-from src import get_logger
+from gaitnet import get_logger
 logger = get_logger()
 
 

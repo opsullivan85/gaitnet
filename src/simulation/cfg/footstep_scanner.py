@@ -1,7 +1,7 @@
 from typing import Callable
 
 from isaaclab.sensors import RayCasterCfg, patterns
-import src.constants as const
+import gaitnet.constants as const
 
 _hip_names = ["FL_hip", "FR_hip", "RL_hip", "RR_hip"]
 

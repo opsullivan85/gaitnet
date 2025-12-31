@@ -11,13 +11,13 @@ from isaaclab.managers import (
 )
 import copy
 
-from src import get_logger
-from src.gaitnet.actions.mpc_action import ManagerBasedEnv
-from src.gaitnet.components.footstep_candidate_sampler import FootstepCandidateSampler
-from src.gaitnet.components.gaitnet_observation_manager import (
+from gaitnet import get_logger
+from gaitnet.gaitnet.actions.mpc_action import ManagerBasedEnv
+from gaitnet.gaitnet.components.footstep_candidate_sampler import FootstepCandidateSampler
+from gaitnet.gaitnet.components.gaitnet_observation_manager import (
     GaitNetObservationManager,
 )
-import src.constants as const
+import gaitnet.constants as const
 
 logger = get_logger()
 

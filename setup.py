@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 
 setup(
-    name="greedy-dynamic-quadruped-gait",
+    name="gaitnet",
     version="0.1.0",
     description="Greedy Dynamic Quadruped Gait",
     packages=find_packages(where="src"),

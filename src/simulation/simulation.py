@@ -26,13 +26,13 @@ import torch
 
 from isaaclab.envs import ManagerBasedRLEnv, ManagerBasedEnv
 
-from src.sim2real import SimInterface
-from src.util import VectorPool
-from src.simulation.util import controls_to_joint_efforts, reset_all_to
-from src.util.data_logging import data_logger
-from src.simulation.cfg.quadrupedenv import QuadrupedEnvCfg, get_quadruped_env_cfg
+from gaitnet.sim2real import SimInterface
+from gaitnet.util import VectorPool
+from gaitnet.simulation.util import controls_to_joint_efforts, reset_all_to
+from gaitnet.util.data_logging import data_logger
+from gaitnet.simulation.cfg.quadrupedenv import QuadrupedEnvCfg, get_quadruped_env_cfg
 
-from src import get_logger
+from gaitnet import get_logger
 logger = get_logger()
 
 

@@ -6,7 +6,7 @@ sys.path.append(str(module_path))
 
 import numpy as np
 
-from src.sim2real import SimInterface
+from gaitnet.sim2real import SimInterface
 
 _control_joint_states = [
     ["FL_hip_pos", "FL_hip_vel"],

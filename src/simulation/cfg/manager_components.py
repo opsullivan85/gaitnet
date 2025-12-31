@@ -13,7 +13,7 @@ from isaaclab.managers import RewardTermCfg as RewTerm  # type: ignore
 from isaaclab.managers import SceneEntityCfg  # type: ignore
 from isaaclab.utils import configclass  # type: ignore
 from isaaclab.utils.noise import AdditiveUniformNoiseCfg as Unoise  # type: ignore
-from src.simulation.cfg.events import reset_controller
+from gaitnet.simulation.cfg.events import reset_controller
 
 
 def constant_commands(env: ManagerBasedEnv) -> torch.Tensor:

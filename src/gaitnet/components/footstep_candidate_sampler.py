@@ -1,12 +1,12 @@
 import random
-import src.constants as const
-from src.contactnet.contactnet import CostMapGenerator
-from src.contactnet.debug import view_footstep_cost_map
-from src.gaitnet.actions.footstep_action import NO_STEP
-from src.gaitnet.actions.mpc_action import ManagerBasedEnv
-from src.gaitnet.env_cfg.observations import contact_state_indices, get_terrain_mask
-from src.simulation.cfg.footstep_scanner_constants import idx_to_xy
-from src.util.math import seeded_uniform_noise
+import gaitnet.constants as const
+from gaitnet.contactnet.contactnet import CostMapGenerator
+from gaitnet.contactnet.debug import view_footstep_cost_map
+from gaitnet.gaitnet.actions.footstep_action import NO_STEP
+from gaitnet.gaitnet.actions.mpc_action import ManagerBasedEnv
+from gaitnet.gaitnet.env_cfg.observations import contact_state_indices, get_terrain_mask
+from gaitnet.simulation.cfg.footstep_scanner_constants import idx_to_xy
+from gaitnet.util.math import seeded_uniform_noise
 
 import torch
 import torch.nn as nn

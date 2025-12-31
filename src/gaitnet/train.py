@@ -1,7 +1,7 @@
 from isaaclab.app import AppLauncher
 import argparse
 
-from src.control.mpc.convex_MPC import Gait
+from gaitnet.control.mpc.convex_MPC import Gait
 
 # add argparse arguments
 parser = argparse.ArgumentParser(
@@ -42,15 +42,15 @@ import signal
 import datetime
 import os
 from isaaclab_rl.rsl_rl import RslRlVecEnvWrapper  # type: ignore
-from src.gaitnet.components.gaitnet_env import GaitNetEnv
-import src.simulation.cfg.footstep_scanner_constants as fs
+from gaitnet.gaitnet.components.gaitnet_env import GaitNetEnv
+import gaitnet.simulation.cfg.footstep_scanner_constants as fs
 from rsl_rl.runners import on_policy_runner
 import rsl_rl.modules
-from src.gaitnet.env_cfg.gaitnet_env_cfg import get_env
-from src.util import log_exceptions
-from src.gaitnet import gaitnet
-import src.constants as const
-from src import get_logger
+from gaitnet.gaitnet.env_cfg.gaitnet_env_cfg import get_env
+from gaitnet.util import log_exceptions
+from gaitnet.gaitnet import gaitnet
+import gaitnet.constants as const
+from gaitnet import get_logger
 
 logger = get_logger()
 

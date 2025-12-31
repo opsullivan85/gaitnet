@@ -9,12 +9,12 @@ from pathlib import Path
 from typing import List, Tuple
 from datetime import datetime
 from isaaclab.envs import ManagerBasedRLEnv
-from src.contactnet.tree import IsaacStateCPU, StepNode
-from src import PROJECT_ROOT
-from src.contactnet.util import get_checkpoint_path, get_dataset_paths
-from src import get_logger
-import src.simulation.cfg.footstep_scanner_constants as fs
-import src.constants as const
+from gaitnet.contactnet.tree import IsaacStateCPU, StepNode
+from gaitnet import PROJECT_ROOT
+from gaitnet.contactnet.util import get_checkpoint_path, get_dataset_paths
+from gaitnet import get_logger
+import gaitnet.simulation.cfg.footstep_scanner_constants as fs
+import gaitnet.constants as const
 
 logger = get_logger()
 
@@ -524,6 +524,6 @@ class CostMapGenerator:
 
 
 if __name__ == "__main__":
-    from src.util import log_exceptions
+    from gaitnet.util import log_exceptions
     with log_exceptions(logger):
         main()

@@ -1,7 +1,7 @@
 from pathlib import Path
-from src import PROJECT_ROOT
+from gaitnet import PROJECT_ROOT
 import argparse
-from src import get_logger
+from gaitnet import get_logger
 
 logger = get_logger()
 

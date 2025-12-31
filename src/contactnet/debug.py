@@ -2,12 +2,12 @@ import numpy as np
 import matplotlib.pyplot as plt
 from nptyping import Float32, NDArray, Shape
 from mpl_toolkits.axes_grid1 import AxesGrid
-from src import PROJECT_ROOT
+from gaitnet import PROJECT_ROOT
 from datetime import datetime
-import src.simulation.cfg.footstep_scanner_constants as fs
+import gaitnet.simulation.cfg.footstep_scanner_constants as fs
 from random import randint
 
-from src import get_logger
+from gaitnet import get_logger
 logger = get_logger()
 
 # Ensure images directory exists

@@ -1,5 +1,5 @@
-from src.util import log_exceptions
-from src import get_logger
+from gaitnet.util import log_exceptions
+from gaitnet import get_logger
 logger = get_logger()
 
 
@@ -19,27 +19,27 @@ if __name__ == "__main__":
 
     with log_exceptions(logger):
         if used_args.datagen:
-            from src.contactnet import datagen
+            from gaitnet.contactnet import datagen
             datagen.main()
 
         elif used_args.train:
-            from src.contactnet import contactnet
+            from gaitnet.contactnet import contactnet
             contactnet.main()
 
         elif used_args.evaluate:
-            from src.contactnet import evaluate
+            from gaitnet.contactnet import evaluate
             evaluate.main()
         
         elif used_args.dfs_debug:
-            from src.contactnet import datagen
+            from gaitnet.contactnet import datagen
             datagen.dfs_debug()
 
         elif used_args.data_info:
-            from src.contactnet import datainfo
+            from gaitnet.contactnet import datainfo
             datainfo.main()
         
         elif used_args.manual_control:
-            from src.contactnet import manualcontrol
+            from gaitnet.contactnet import manualcontrol
             manualcontrol.main()
         
         else:

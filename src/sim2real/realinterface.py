@@ -1,7 +1,7 @@
 
-from src.sim2real.abstractinterface import Sim2RealInterface
+from gaitnet.sim2real.abstractinterface import Sim2RealInterface
 
-from src import get_logger
+from gaitnet import get_logger
 logger = get_logger()
 
 
