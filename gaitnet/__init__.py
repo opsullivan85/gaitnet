@@ -108,8 +108,12 @@ if not logger.handlers:
 if not no_log_file:
     logger.info(f"log file: {log_file}")
 
-launch_str = " ".join(sys.orig_argv)
-logger.debug(f"running '{launch_str}'")
+try:
+    launch_str = " ".join(sys.orig_argv)
+    logger.debug(f"running '{launch_str}'")
+    del launch_str
+except AttributeError:
+    pass
 
 
 def get_logger():
@@ -119,9 +123,9 @@ def get_logger():
         return logging.getLogger("src.unknown")
     frame = frame.f_back
     filename = frame.f_code.co_filename
-    rel_path = Path(filename).relative_to(PROJECT_ROOT / "src")
+    rel_path = Path(filename).relative_to(PROJECT_ROOT / "gaitnet")
     module_name = str(rel_path).replace("/", ".").replace("\\", ".").replace(".py", "")
-    return logging.getLogger("src." + module_name)
+    return logging.getLogger("gaitnet." + module_name)
 
 
 # Delete old log files (only if logging to file)
@@ -141,7 +145,6 @@ if not no_log_file:
 del (
     ch,
     fh,
-    launch_str,
     no_log_file,
     ProjectRelativeFormatter,
     AlignedFormatter,
