@@ -1,15 +1,12 @@
 from typing import Any
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
-from src.gaitnet.actions.footstep_action import Sequence
+from typing import Sequence
 from rsl_rl.modules import ActorCritic
 from src import get_logger
-from src.gaitnet.components.gaitnet_env import GaitNetEnv
 from torch.distributions import Normal, Categorical
 import src.constants as const
-import tensordict
 
 logger = get_logger()
 
