@@ -1,3 +1,4 @@
+import random
 import src.constants as const
 from src.contactnet.contactnet import CostMapGenerator
 from src.contactnet.debug import view_footstep_cost_map
@@ -96,6 +97,38 @@ class FootstepCandidateSampler:
         topk_pos = idx_to_xy(topk_indices)  # (num_envs, num_options, 3)
 
         return topk_pos, topk_values
+    
+    def _random_sample_options(
+        self, cost_map: torch.Tensor, options_per_leg: int
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """
+        Get random footstep options for each leg.
+
+        Args:
+            cost_map: (num_envs, 4, H, W) filtered cost maps for each leg
+            options_per_leg: number of options to sample per leg
+        
+        Returns:
+            options: (num_envs, num_options, 3) sampled options as (leg_idx, dx, dy)
+            values: (num_envs, num_options) corresponding costs (either 0 or inf)
+        """
+        # hacky implementation: copy costmap use as a mask for random noise, then use _best_options_per_leg
+
+        valid_mask = ~torch.isinf(cost_map)  # (num_envs, 4, H, W)
+        noisy_cost_map = torch.rand_like(cost_map)
+        noisy_cost_map = torch.where(
+            valid_mask, noisy_cost_map, torch.tensor(float("inf"))
+        )
+        random_options, random_values = self._best_options_per_leg(
+            noisy_cost_map, options_per_leg
+        )
+        # update values to be 0 if valid, inf if invalid
+        random_values = torch.where(
+            torch.isinf(random_values),
+            torch.tensor(float("inf"), device=cost_map.device),
+            torch.tensor(0.0, device=cost_map.device),
+        )
+        return random_options, random_values
 
     @staticmethod
     def _best_options_per_leg(
@@ -181,52 +214,59 @@ class FootstepCandidateSampler:
                           Each option is represented as (leg_index, x_offset, y_offset, cost)
                           appends a NO_STEP option at the end of the list.
         """
-        contactnet_obs = obs[:, :18]
-        with torch.inference_mode():
-            cost_maps = self.cost_map_generator.predict(
-                contactnet_obs
-            )  # (num_envs, 4, H, W)
-        # switch from (FL, FR, RL, RR) to (FR, FL, RR, RL)
-        cost_maps = cost_maps[:, [1, 0, 3, 2], :, :]
-        if _debug_footstep_cost_map_all:
-            view_footstep_cost_map(
-                cost_map=cost_maps[0][[1, 0, 3, 2]].cpu().numpy(),
-                title="Default Footstep Cost Map",
-                save_figure=True,
-                show_ticks=False,
-            )
-
-        # interpolate cost map
-        cost_maps = nn.functional.interpolate(
-            cost_maps,  # (num_envs, 4, h, w) 4 is being used as the channel dimension here
-            size=const.footstep_scanner.grid_size.tolist(),  # (H, W)
-            mode="bilinear",
-            align_corners=True,
-        ).squeeze(
-            1
-        )  # (num_envs, 4, H, W)
-        if _debug_footstep_cost_map_all:
-            view_footstep_cost_map(
-                cost_map=cost_maps[0][[1, 0, 3, 2]].cpu().numpy(),
-                title="Scaled Footstep Cost Map",
-                save_figure=True,
-                show_ticks=False,
-            )
-
-        if self.noise:
-            noise = seeded_uniform_noise(cost_maps, cost_maps.shape[1:])
-            noise = (
-                noise * 2 * const.gait_net.upscale_costmap_noise
-                - const.gait_net.upscale_costmap_noise
-            )
-            cost_maps += noise
+        if not const.experiments.random_footstep_sampling:
+            contactnet_obs = obs[:, :18]
+            with torch.inference_mode():
+                cost_maps = self.cost_map_generator.predict(
+                    contactnet_obs
+                )  # (num_envs, 4, H, W)
+            # switch from (FL, FR, RL, RR) to (FR, FL, RR, RL)
+            cost_maps = cost_maps[:, [1, 0, 3, 2], :, :]
             if _debug_footstep_cost_map_all:
                 view_footstep_cost_map(
                     cost_map=cost_maps[0][[1, 0, 3, 2]].cpu().numpy(),
-                    title="Noisy Footstep Cost Map",
+                    title="Default Footstep Cost Map",
                     save_figure=True,
                     show_ticks=False,
                 )
+
+            # interpolate cost map
+            cost_maps = nn.functional.interpolate(
+                cost_maps,  # (num_envs, 4, h, w) 4 is being used as the channel dimension here
+                size=const.footstep_scanner.grid_size.tolist(),  # (H, W)
+                mode="bilinear",
+                align_corners=True,
+            ).squeeze(
+                1
+            )  # (num_envs, 4, H, W)
+            if _debug_footstep_cost_map_all:
+                view_footstep_cost_map(
+                    cost_map=cost_maps[0][[1, 0, 3, 2]].cpu().numpy(),
+                    title="Scaled Footstep Cost Map",
+                    save_figure=True,
+                    show_ticks=False,
+                )
+
+            if self.noise:
+                noise = seeded_uniform_noise(cost_maps, cost_maps.shape[1:])
+                noise = (
+                    noise * 2 * const.gait_net.upscale_costmap_noise
+                    - const.gait_net.upscale_costmap_noise
+                )
+                cost_maps += noise
+                if _debug_footstep_cost_map_all:
+                    view_footstep_cost_map(
+                        cost_map=cost_maps[0][[1, 0, 3, 2]].cpu().numpy(),
+                        title="Noisy Footstep Cost Map",
+                        save_figure=True,
+                        show_ticks=False,
+                    )
+        else:
+            cost_maps = torch.ones(
+                (obs.shape[0], 4, const.footstep_scanner.grid_size[0], const.footstep_scanner.grid_size[1]),
+                device=obs.device,
+                dtype=torch.float32,
+            )
 
         cost_maps = self._filter_cost_map(cost_maps, obs)  # (num_envs, 4, H, W)
         if _debug_footstep_cost_map_all:
@@ -239,13 +279,17 @@ class FootstepCandidateSampler:
                 tick_rotations=(90, 0),
             )
 
-        # best_options, best_values = self._overall_best_options(masked_cost_maps, self.num_options)
-        best_options, best_values = self._best_options_per_leg(
-            cost_maps, self.options_per_leg
-        )
+        if const.experiments.random_footstep_sampling:
+            options, values = self._random_sample_options(
+                cost_maps, self.options_per_leg
+            )
+        else:
+            options, values = self._best_options_per_leg(
+                cost_maps, self.options_per_leg
+            )
         if _debug_footstep_cost_map:
             applied_map = self._apply_options_to_cost_map(
-                cost_maps, best_options
+                cost_maps, options
             )
             view_footstep_cost_map(
                 applied_map[0][[1, 0, 3, 2]].cpu().numpy(),
@@ -257,25 +301,25 @@ class FootstepCandidateSampler:
             )
 
         # replace any options with inf cost with NO_STEP option and 0 cost
-        inf_mask = torch.isinf(best_values)  # (num_envs, num_options)
+        inf_mask = torch.isinf(values)  # (num_envs, num_options)
         if inf_mask.any():
             # Use unsqueeze to broadcast the mask to match best_options shape
             inf_mask_expanded = inf_mask.unsqueeze(-1)  # (num_envs, num_options, 1)
-            best_options[:, :, 0] = torch.where(
+            options[:, :, 0] = torch.where(
                 inf_mask,
                 torch.tensor(
-                    NO_STEP, device=best_options.device, dtype=best_options.dtype
+                    NO_STEP, device=options.device, dtype=options.dtype
                 ),
-                best_options[:, :, 0],
+                options[:, :, 0],
             )
-            best_options[:, :, 1:3] = torch.where(
+            options[:, :, 1:3] = torch.where(
                 inf_mask_expanded.expand(-1, -1, 2),
-                torch.tensor(0.0, device=best_options.device, dtype=best_options.dtype),
-                best_options[:, :, 1:3],
+                torch.tensor(0.0, device=options.device, dtype=options.dtype),
+                options[:, :, 1:3],
             )
-            best_values[inf_mask] = 0.0
+            values[inf_mask] = 0.0
 
-        result = torch.cat([best_options, best_values.unsqueeze(-1)], dim=-1)
+        result = torch.cat([options, values.unsqueeze(-1)], dim=-1)
         # (num_envs, num_options, 4) where each option is (leg, dx, dy, cost)
 
         # zero out cost for ablation study
