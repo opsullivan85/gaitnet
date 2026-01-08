@@ -43,7 +43,7 @@ from gaitnet.eval.components.fixed_velocity_command import (
 from gaitnet import GIT_COMMIT, get_logger
 from gaitnet.util.pga import generate_footstep_action
 from gaitnet.gaitnet.env_cfg.observations import get_terrain_mask
-from gaitnet.simulation.cfg.footstep_scanner_constants import xy_to_idx
+from gaitnet.simulation.cfg.footstep_scanner_constants import xy_to_idx, idx_to_xy
 
 logger = get_logger()
 
@@ -133,7 +133,8 @@ def main():
                 terrain_mask=get_terrain_mask(const.gait_net.valid_height_range, terrain_obs),
                 leg=leg,
                 gaitnet=model,
-            pos_to_idx=xy_to_idx,
+                pos_to_idx=xy_to_idx,
+                idx_to_pos=idx_to_xy,
             )
             # update best actions and logits where applicable
             better_mask = logit_.squeeze(-1) > best_logits

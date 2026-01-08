@@ -6,7 +6,7 @@ try:
     from gaitnet.control import RobotRunnerMin, RobotType
 except ImportError as e:
     raise ImportError(
-        "Failed to import from src.control. Make sure the control module is correctly installed."
+        "Failed to import from gaitnet.control. Make sure the control module is correctly installed."
     ) from e
 from gaitnet.sim2real.abstractinterface import Sim2RealInterface
 import logging

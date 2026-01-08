@@ -8,6 +8,7 @@ import numpy as np
 from pathlib import Path
 from typing import List, Tuple
 from datetime import datetime
+import gaitnet
 from isaaclab.envs import ManagerBasedRLEnv
 from gaitnet.contactnet.tree import IsaacStateCPU, StepNode
 from gaitnet import PROJECT_ROOT
@@ -15,6 +16,7 @@ from gaitnet.contactnet.util import get_checkpoint_path, get_dataset_paths
 from gaitnet import get_logger
 import gaitnet.simulation.cfg.footstep_scanner_constants as fs
 import gaitnet.constants as const
+import sys
 
 logger = get_logger()
 
@@ -34,6 +36,17 @@ class FootstepDataset(Dataset):
         Args:
             data_path: Path to the pickled data file
         """
+        new_vals = {}
+        for key in sys.modules.keys():
+            # for keys which start with gaitnet.
+            if key.startswith("gaitnet"):
+                new_key = key.replace("gaitnet", "src")
+                # also inport all gaitnet.XXX as src.XXX modules
+                if new_key not in sys.modules:
+                    new_vals[new_key] = sys.modules[key]
+        sys.modules.update(new_vals)
+
+
         logger.info(f"loading data from {data_paths}")
 
         self.training_data: List[StepNode] = []
@@ -41,7 +54,7 @@ class FootstepDataset(Dataset):
 
         for data_path in data_paths:
             with open(data_path, "rb") as f:
-                data = pickle.load(f)
+                    data = pickle.load(f)
 
             self.training_data.extend(data["training_data"])
             self.metadatas.append(data["metadata"])
