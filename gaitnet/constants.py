@@ -104,6 +104,8 @@ class _Experiments:
     """If true, log swing duration statistics."""
     contact_schedule_logging: bool = False
     """If true, log contact schedule statistics, only for first robot."""
+    pga_debug_plots: bool = False
+    """If true, generate matplotlib debug plots showing PGA optimization evolution."""
 
 
 experiments = _Experiments()

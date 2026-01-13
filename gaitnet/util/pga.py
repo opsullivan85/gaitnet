@@ -3,6 +3,9 @@ import torch.nn.functional as F
 from typing import Optional, Tuple, Callable
 from scipy.ndimage import distance_transform_edt
 import numpy as np
+import matplotlib.pyplot as plt
+from pathlib import Path
+import gaitnet.constants as const
 
 
 def precompute_distance_transform(
@@ -99,8 +102,8 @@ def generate_footstep_action(
     pos_to_idx: Callable,
     idx_to_pos: Optional[Callable] = None,
     guess: Optional[Tuple[torch.Tensor, torch.Tensor]] = None,
-    learning_rate: float = 0.1,
-    num_iterations: int = 10,
+    learning_rate: float = 0.001,
+    num_iterations: int = 30,
     num_samples: int = 16,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """Function to use projected gradient ascent (PGA) to maximize footstep action value.
@@ -143,6 +146,7 @@ def generate_footstep_action(
     """
     batch_size = state.shape[0]
     device = state.device
+    debug_plots = const.experiments.pga_debug_plots
     
     # Check for completely invalid terrain - return early with zeros
     valid_per_batch = terrain_mask.sum(dim=(1, 2))  # (batch,)
@@ -171,16 +175,23 @@ def generate_footstep_action(
     x, y = project_to_valid_terrain(x, y, nearest_i, nearest_j, pos_to_idx, idx_to_pos)
     
     # Create leg one-hot encoding: (batch, num_samples, 5)
+    # Note: one-hot is [no_op, leg0, leg1, leg2, leg3], so add 1 to leg index
     leg_one_hot = F.one_hot(
-        torch.full((batch_size, num_samples), leg, device=device, dtype=torch.long),
+        torch.full((batch_size, num_samples), leg + 1, device=device, dtype=torch.long),
         num_classes=5
     ).float()
     
     # Expand state for samples: (batch, state_dim) -> (batch, num_samples, state_dim)
     state_expanded = state.unsqueeze(1).expand(-1, num_samples, -1)
     
+    # Debug: track best sample trajectory for first batch element
+    if debug_plots:
+        best_trajectory_x = []
+        best_trajectory_y = []
+        best_trajectory_val = []
+    
     # PGA optimization loop
-    for _ in range(num_iterations):
+    for iteration in range(num_iterations):
         # Enable gradients for x and y
         x = x.detach().requires_grad_(True)
         y = y.detach().requires_grad_(True)
@@ -203,6 +214,13 @@ def generate_footstep_action(
         # Get value predictions
         value_flat, duration_flat = gaitnet(obs_flat)
         value = value_flat.view(batch_size, num_samples)
+        
+        # Debug: track best sample for first batch element
+        if debug_plots:
+            best_sample_idx = value[0].argmax().item()
+            best_trajectory_x.append(x[0, best_sample_idx].detach().cpu().item())
+            best_trajectory_y.append(y[0, best_sample_idx].detach().cpu().item())
+            best_trajectory_val.append(value[0, best_sample_idx].detach().cpu().item())
         
         # Compute gradients w.r.t. x and y (maximize value)
         total_value = value.sum()
@@ -261,4 +279,176 @@ def generate_footstep_action(
             action[invalid_batch, 0] = leg
             best_value[invalid_batch] = float("-inf")
     
+    # Debug: generate visualization plots
+    if debug_plots:
+        _generate_pga_debug_plot(
+            leg=leg,
+            terrain_mask=terrain_mask[0],
+            trajectory_x=best_trajectory_x,
+            trajectory_y=best_trajectory_y,
+            trajectory_val=best_trajectory_val,
+            final_x=best_x[0].cpu().item(),
+            final_y=best_y[0].cpu().item(),
+            final_val=best_value[0].cpu().item(),
+            state=state[0:1],
+            gaitnet=gaitnet,
+            pos_to_idx=pos_to_idx,
+            idx_to_pos=idx_to_pos,
+            device=device,
+        )
+    
     return action, best_value.unsqueeze(-1)
+
+
+def _generate_pga_debug_plot(
+    leg: int,
+    terrain_mask: torch.Tensor,
+    trajectory_x: list,
+    trajectory_y: list,
+    trajectory_val: list,
+    final_x: float,
+    final_y: float,
+    final_val: float,
+    state: torch.Tensor,
+    gaitnet,
+    pos_to_idx: Callable,
+    idx_to_pos: Callable,
+    device: torch.device,
+):
+    """Generate debug visualization of PGA optimization.
+    
+    Creates a figure with:
+    - Left: Coarse grid evaluation of model value across valid terrain + optimization trajectory
+    - Right: Value evolution over iterations
+    """
+    # Create output directory
+    output_dir = Path("data/debug-images")
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
+    height, width = terrain_mask.shape
+    terrain_np = terrain_mask.cpu().numpy()
+    
+    # Generate coarse grid of positions to evaluate
+    # Use idx_to_pos to get the coordinate range
+    corner_indices = torch.tensor([[0, 0], [height-1, width-1]], device=device)
+    corner_xy = idx_to_pos(corner_indices)
+    x_min, y_min = corner_xy[0, 0].item(), corner_xy[0, 1].item()
+    x_max, y_max = corner_xy[1, 0].item(), corner_xy[1, 1].item()
+    
+    # Create coarse grid (use ~20x20 for visualization)
+    grid_resolution = 20
+    grid_x = torch.linspace(x_min, x_max, grid_resolution, device=device)
+    grid_y = torch.linspace(y_min, y_max, grid_resolution, device=device)
+    grid_xx, grid_yy = torch.meshgrid(grid_x, grid_y, indexing='ij')
+    
+    # Flatten for batch evaluation
+    eval_x = grid_xx.flatten()  # (grid_resolution^2,)
+    eval_y = grid_yy.flatten()
+    
+    # Check which grid points are on valid terrain
+    eval_xy = torch.stack([eval_x, eval_y], dim=-1)  # (N, 2)
+    eval_indices, in_bounds = pos_to_idx(eval_xy)
+    eval_i = eval_indices[:, 0].clamp(0, height - 1).long()
+    eval_j = eval_indices[:, 1].clamp(0, width - 1).long()
+    valid_mask = terrain_mask[eval_i, eval_j].bool() & in_bounds
+    
+    # Evaluate gaitnet on all grid points
+    with torch.no_grad():
+        # Note: one-hot is [no_op, leg0, leg1, leg2, leg3], so add 1 to leg index
+        leg_one_hot = F.one_hot(
+            torch.full((len(eval_x),), leg + 1, device=device, dtype=torch.long),
+            num_classes=5
+        ).float()
+        state_expanded = state.expand(len(eval_x), -1)
+        
+        observation = torch.cat(
+            [
+                state_expanded,
+                leg_one_hot,
+                eval_x.unsqueeze(-1),
+                eval_y.unsqueeze(-1),
+                torch.zeros_like(eval_x.unsqueeze(-1)),
+            ],
+            dim=-1,
+        )
+        
+        value_flat, _ = gaitnet(observation)
+        value_grid = value_flat.view(grid_resolution, grid_resolution).cpu().numpy()
+    
+    # Mask invalid terrain with NaN for visualization
+    valid_grid = valid_mask.view(grid_resolution, grid_resolution).cpu().numpy()
+    value_grid_masked = np.where(valid_grid, value_grid, np.nan)
+    
+    # Create figure
+    fig, axes = plt.subplots(1, 2, figsize=(14, 6))
+    
+    # Left plot: Value landscape + trajectory
+    ax1 = axes[0]
+    
+    # Plot value heatmap
+    extent = [y_min, y_max, x_min, x_max]  # Note: imshow expects [left, right, bottom, top]
+    im = ax1.imshow(
+        value_grid_masked,
+        extent=extent,
+        origin='lower',
+        cmap='viridis',
+        aspect='equal',
+    )
+    plt.colorbar(im, ax=ax1, label='Value')
+    
+    # Overlay terrain mask (show invalid as semi-transparent red)
+    terrain_display = np.where(terrain_np, np.nan, 0.5)
+    terrain_extent = [y_min, y_max, x_min, x_max]
+    ax1.imshow(
+        np.ones((height, width, 4)) * [1, 0, 0, 0.3],  # Red with alpha
+        extent=terrain_extent,
+        origin='lower',
+        aspect='equal',
+        alpha=np.where(terrain_np, 0, 0.3),
+    )
+    
+    # Plot optimization trajectory
+    if len(trajectory_x) > 0:
+        traj_x = np.array(trajectory_x)
+        traj_y = np.array(trajectory_y)
+        
+        # Draw trajectory line
+        ax1.plot(traj_y, traj_x, 'w-', linewidth=2, alpha=0.8, label='Trajectory')
+        
+        # Color points by iteration
+        colors = plt.cm.cool(np.linspace(0, 1, len(traj_x)))
+        for i in range(len(traj_x)):
+            ax1.scatter(traj_y[i], traj_x[i], c=[colors[i]], s=50, edgecolors='white', linewidth=0.5)
+        
+        # Mark start and end
+        ax1.scatter(traj_y[0], traj_x[0], c='cyan', s=150, marker='o', edgecolors='black', linewidth=2, label='Start', zorder=10)
+    
+    # Mark final best position
+    ax1.scatter(final_y, final_x, c='red', s=200, marker='*', edgecolors='black', linewidth=2, label='Final', zorder=11)
+    
+    ax1.set_xlabel('Y (m)')
+    ax1.set_ylabel('X (m)')
+    ax1.set_title(f'PGA Value Landscape (Leg {leg})\nFinal value: {final_val:.4f}')
+    ax1.legend(loc='upper right')
+    
+    # Right plot: Value evolution over iterations
+    ax2 = axes[1]
+    iterations = list(range(len(trajectory_val)))
+    ax2.plot(iterations, trajectory_val, 'b-o', linewidth=2, markersize=6)
+    ax2.axhline(y=final_val, color='r', linestyle='--', label=f'Final: {final_val:.4f}')
+    ax2.set_xlabel('Iteration')
+    ax2.set_ylabel('Best Sample Value')
+    ax2.set_title('Value Evolution During PGA')
+    ax2.legend()
+    ax2.grid(True, alpha=0.3)
+    
+    plt.tight_layout()
+    
+    # Save figure
+    import time
+    timestamp = int(time.time() * 1000)
+    filename = output_dir / f"pga_debug_{timestamp}_leg{leg}.png"
+    plt.savefig(filename, dpi=150, bbox_inches='tight')
+    plt.close(fig)
+    
+    print(f"PGA debug plot saved to: {filename}")

@@ -44,6 +44,7 @@ from gaitnet import GIT_COMMIT, get_logger
 from gaitnet.util.pga import generate_footstep_action
 from gaitnet.gaitnet.env_cfg.observations import get_terrain_mask
 from gaitnet.simulation.cfg.footstep_scanner_constants import xy_to_idx, idx_to_xy
+from gaitnet.gaitnet.actions.footstep_action import NO_STEP
 
 logger = get_logger()
 
@@ -108,6 +109,11 @@ def main():
     log_name = f"gaitnet_eval_d{args_cli.difficulty}_v{args_cli.velocity}_commit{GIT_COMMIT}.csv"
     evaluator = Evaluator(env, observations, trials=args_cli.trials, name=log_name)
 
+    def nmodel(obs: torch.Tensor):
+        out = model(obs)
+        out = (-out[0], out[1])  # negate log probs to get logits
+        return out
+
     # with torch.inference_mode():
     while not evaluator.done:
         # Due to a long series of unfortunate design choices, we have to completley hack together the
@@ -128,22 +134,52 @@ def main():
         # so I just had one big observation tensor to work with.
         terrain_obs = torch.cat([base_obs, footstep_option_manager.most_recent_terrain_obs], dim=1)
         for leg in range(const.robot.num_legs):
-            action_, logit_ = generate_footstep_action(
+            leg_terrain_mask = get_terrain_mask(const.gait_net.valid_height_range, terrain_obs)[:, leg]
+            leg_action, leg_logit = generate_footstep_action(
                 state=base_obs,
-                terrain_mask=get_terrain_mask(const.gait_net.valid_height_range, terrain_obs),
+                terrain_mask=leg_terrain_mask,
                 leg=leg,
                 gaitnet=model,
                 pos_to_idx=xy_to_idx,
                 idx_to_pos=idx_to_xy,
             )
-            # update best actions and logits where applicable
-            better_mask = logit_.squeeze(-1) > best_logits
-            best_logits = torch.where(better_mask, logit_.squeeze(-1), best_logits)
+            # since we pick the single best action across all legs, we need to compare logits here
+            better_mask = leg_logit.squeeze(-1) > best_logits
+            best_logits = torch.where(better_mask, leg_logit.squeeze(-1), best_logits)
             best_actions = torch.where(
                 better_mask.unsqueeze(-1),
-                action_,
+                leg_action,
                 best_actions,
             )
+        
+        # Evaluate no-op option and compare against best leg action
+        # No-op one-hot is [1,0,0,0,0] (index 0), with x=0, y=0, cost=0
+        no_op_one_hot = torch.zeros((args_cli.num_envs, 5), device=device)
+        no_op_one_hot[:, 0] = 1  # no-op is index 0
+        no_op_obs = torch.cat(
+            [
+                base_obs,
+                no_op_one_hot,
+                torch.zeros((args_cli.num_envs, 1), device=device),  # x
+                torch.zeros((args_cli.num_envs, 1), device=device),  # y
+                torch.zeros((args_cli.num_envs, 1), device=device),  # cost
+            ],
+            dim=-1,
+        )
+        no_op_value, _ = model(no_op_obs)
+        no_op_logit = no_op_value.squeeze(-1)
+        
+        # Check if no-op is better than best leg action
+        no_op_better = no_op_logit > best_logits
+        best_logits = torch.where(no_op_better, no_op_logit, best_logits)
+        # No-op action: leg=NO_STEP (-1), x=0, y=0, duration=0
+        no_op_action = torch.tensor([NO_STEP, 0.0, 0.0, 0.0], device=device).expand(args_cli.num_envs, -1)
+        best_actions = torch.where(
+            no_op_better.unsqueeze(-1),
+            no_op_action,
+            best_actions,
+        )
+        
         # inject the best actions into the observation manager
         footstep_option_manager.footstep_options = best_actions.unsqueeze(1)  # (num_envs, 1, 4)
 
