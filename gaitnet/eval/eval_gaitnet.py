@@ -31,6 +31,7 @@ from gaitnet.gaitnet.util import get_checkpoint_path
 from isaaclab.terrains import TerrainGeneratorCfg
 from gaitnet.gaitnet.components.gaitnet_env import GaitNetEnv, GaitNetObservationManager
 from gaitnet.gaitnet.env_cfg.gaitnet_env_cfg import get_env, get_env_cfg, update_controllers
+from gaitnet.gaitnet.components.footstep_candidate_sampler import FootstepCandidateSampler
 from gaitnet.util import log_exceptions
 from gaitnet.gaitnet import gaitnet
 import re
@@ -42,7 +43,6 @@ from gaitnet.eval.components.fixed_velocity_command import (
 )
 from gaitnet import GIT_COMMIT, get_logger
 from gaitnet.util.pga import generate_footstep_action
-from gaitnet.gaitnet.env_cfg.observations import get_terrain_mask
 from gaitnet.simulation.cfg.footstep_scanner_constants import xy_to_idx, idx_to_xy
 from gaitnet.gaitnet.actions.footstep_action import NO_STEP
 
@@ -72,7 +72,7 @@ def load_model(checkpoint_path: Path, device: torch.device) -> gaitnet.GaitnetAc
 
 def main():
     args_cli.device = "cpu"
-    args_cli.num_envs = 7
+    args_cli.num_envs = 1
     device = torch.device(args_cli.device)
     model = load_model(get_checkpoint_path(), device)
     model.eval()
@@ -134,7 +134,13 @@ def main():
         # so I just had one big observation tensor to work with.
         terrain_obs = torch.cat([base_obs, footstep_option_manager.most_recent_terrain_obs], dim=1)
         for leg in range(const.robot.num_legs):
-            leg_terrain_mask = get_terrain_mask(const.gait_net.valid_height_range, terrain_obs)[:, leg]
+            leg_terrain_mask = FootstepCandidateSampler.filter_cost_map(
+                cost_map=None,
+                obs=terrain_obs,
+            )
+            # prior method uses 0=valid, inf=invalid, so change this to a bool mask
+            leg_terrain_mask = leg_terrain_mask[:, leg] != float("inf")
+
             leg_action, leg_logit = generate_footstep_action(
                 state=base_obs,
                 terrain_mask=leg_terrain_mask,
@@ -179,6 +185,7 @@ def main():
             no_op_action,
             best_actions,
         )
+        print(best_actions[0])
         
         # inject the best actions into the observation manager
         footstep_option_manager.footstep_options = best_actions.unsqueeze(1)  # (num_envs, 1, 4)

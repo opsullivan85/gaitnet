@@ -21,8 +21,9 @@ class FootstepCandidateSampler:
         self.options_per_leg = options_per_leg
         self.noise = noise
 
-    def _filter_cost_map(
-        self, cost_map: torch.Tensor, obs: torch.Tensor
+    @staticmethod
+    def filter_cost_map(
+        cost_map: torch.Tensor|None, obs: torch.Tensor
     ) -> torch.Tensor:
         """
         Filter the cost map to remove invalid footstep options based on terrain and robot state.
@@ -34,6 +35,12 @@ class FootstepCandidateSampler:
         Returns:
             filtered_cost_map: (num_envs, 4, H, W) cost maps with invalid options set to inf
         """
+        if cost_map is None:
+            # if no cost map is provided, construct a zero one
+            cost_map = torch.zeros(
+                (obs.shape[0], 4, const.footstep_scanner.grid_size[0], const.footstep_scanner.grid_size[1]),
+                device=obs.device,
+            )
         # remove options with invalid terrain
         terrain_mask = get_terrain_mask(
             const.gait_net.valid_height_range, obs
@@ -268,7 +275,7 @@ class FootstepCandidateSampler:
                 dtype=torch.float32,
             )
 
-        cost_maps = self._filter_cost_map(cost_maps, obs)  # (num_envs, 4, H, W)
+        cost_maps = self.filter_cost_map(cost_maps, obs)  # (num_envs, 4, H, W)
         if _debug_footstep_cost_map_all:
             view_footstep_cost_map(
                 cost_maps[0][[1, 0, 3, 2]].cpu().numpy(),

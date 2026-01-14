@@ -102,9 +102,9 @@ def generate_footstep_action(
     pos_to_idx: Callable,
     idx_to_pos: Optional[Callable] = None,
     guess: Optional[Tuple[torch.Tensor, torch.Tensor]] = None,
-    learning_rate: float = 0.001,
-    num_iterations: int = 30,
-    num_samples: int = 16,
+    learning_rate: float = 0.01,
+    num_iterations: int = 5,
+    num_samples: int = 4,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """Function to use projected gradient ascent (PGA) to maximize footstep action value.
     called seperatley for each leg, with correct terrain masks.
