@@ -32,7 +32,7 @@ from isaaclab.terrains import TerrainGeneratorCfg
 from gaitnet.gaitnet.components.gaitnet_env import GaitNetEnv, GaitNetObservationManager
 from gaitnet.gaitnet.env_cfg.gaitnet_env_cfg import get_env, get_env_cfg, update_controllers
 from gaitnet.gaitnet.components.footstep_candidate_sampler import FootstepCandidateSampler
-from gaitnet.util import log_exceptions
+from gaitnet.util import log_exceptions, timer
 from gaitnet.gaitnet import gaitnet
 import re
 from pathlib import Path
@@ -71,8 +71,8 @@ def load_model(checkpoint_path: Path, device: torch.device) -> gaitnet.GaitnetAc
 
 
 def main():
-    args_cli.device = "cpu"
-    args_cli.num_envs = 1
+    # args_cli.device = "cpu"
+    # args_cli.num_envs = 1
     device = torch.device(args_cli.device)
     model = load_model(get_checkpoint_path(), device)
     model.eval()
@@ -116,6 +116,7 @@ def main():
 
     # with torch.inference_mode():
     while not evaluator.done:
+        # with timer.Timer(logger, msg="Evaluation Loop"):
         # Due to a long series of unfortunate design choices, we have to completley hack together the
         # custom footstep action generation here. Normally, a set of candidates is generated in the 
         # observation manager, but we need to generate them here to use PGA, so we inject them back
@@ -185,7 +186,7 @@ def main():
             no_op_action,
             best_actions,
         )
-        print(best_actions[0])
+        # print(best_actions[0])
         
         # inject the best actions into the observation manager
         footstep_option_manager.footstep_options = best_actions.unsqueeze(1)  # (num_envs, 1, 4)
@@ -201,6 +202,7 @@ def main():
         evaluator.process(env_step_info)
 
     logger.info("Evaluation complete.")
+    print("Evaluation complete.")
 
 
 if __name__ == "__main__":

@@ -168,6 +168,7 @@ def main():
             continue
         
         logger.info(f"[Iteration {iteration}/{total_iterations-1}] Running {script} with difficulty {difficulty} and speed {speed}")
+        print(f"[Iteration {iteration}/{total_iterations-1}] Running {script} with difficulty {difficulty} and speed {speed}")
         subprocess_args = [
             sys.executable,
             "-m",
@@ -187,6 +188,7 @@ def main():
         
         run_with_timeout(subprocess_args, timeout_after_completion=5)
         logger.info(f"Completed iteration {iteration}\n")
+        print(f"Completed iteration {iteration}\n")
         
         # Extra safety: wait a moment between runs
         time.sleep(1)

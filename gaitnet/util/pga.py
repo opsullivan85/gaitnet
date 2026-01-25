@@ -102,9 +102,9 @@ def generate_footstep_action(
     pos_to_idx: Callable,
     idx_to_pos: Optional[Callable] = None,
     guess: Optional[Tuple[torch.Tensor, torch.Tensor]] = None,
-    learning_rate: float = 0.01,
-    num_iterations: int = 5,
-    num_samples: int = 4,
+    learning_rate: float = 0.001,
+    num_iterations: int = 4,
+    num_samples: int = 8,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """Function to use projected gradient ascent (PGA) to maximize footstep action value.
     called seperatley for each leg, with correct terrain masks.
@@ -184,11 +184,11 @@ def generate_footstep_action(
     # Expand state for samples: (batch, state_dim) -> (batch, num_samples, state_dim)
     state_expanded = state.unsqueeze(1).expand(-1, num_samples, -1)
     
-    # Debug: track best sample trajectory for first batch element
+    # Debug: track all sample trajectories for first batch element
     if debug_plots:
-        best_trajectory_x = []
-        best_trajectory_y = []
-        best_trajectory_val = []
+        all_trajectory_x = []  # list of (num_samples,) arrays per iteration
+        all_trajectory_y = []
+        all_trajectory_val = []
     
     # PGA optimization loop
     for iteration in range(num_iterations):
@@ -215,12 +215,11 @@ def generate_footstep_action(
         value_flat, duration_flat = gaitnet(obs_flat)
         value = value_flat.view(batch_size, num_samples)
         
-        # Debug: track best sample for first batch element
+        # Debug: track all samples for first batch element
         if debug_plots:
-            best_sample_idx = value[0].argmax().item()
-            best_trajectory_x.append(x[0, best_sample_idx].detach().cpu().item())
-            best_trajectory_y.append(y[0, best_sample_idx].detach().cpu().item())
-            best_trajectory_val.append(value[0, best_sample_idx].detach().cpu().item())
+            all_trajectory_x.append(x[0].detach().cpu().numpy().copy())
+            all_trajectory_y.append(y[0].detach().cpu().numpy().copy())
+            all_trajectory_val.append(value[0].detach().cpu().numpy().copy())
         
         # Compute gradients w.r.t. x and y (maximize value)
         total_value = value.sum()
@@ -284,12 +283,13 @@ def generate_footstep_action(
         _generate_pga_debug_plot(
             leg=leg,
             terrain_mask=terrain_mask[0],
-            trajectory_x=best_trajectory_x,
-            trajectory_y=best_trajectory_y,
-            trajectory_val=best_trajectory_val,
+            all_trajectory_x=all_trajectory_x,
+            all_trajectory_y=all_trajectory_y,
+            all_trajectory_val=all_trajectory_val,
             final_x=best_x[0].cpu().item(),
             final_y=best_y[0].cpu().item(),
             final_val=best_value[0].cpu().item(),
+            best_sample_idx=best_idx[0].cpu().item(),
             state=state[0:1],
             gaitnet=gaitnet,
             pos_to_idx=pos_to_idx,
@@ -303,12 +303,13 @@ def generate_footstep_action(
 def _generate_pga_debug_plot(
     leg: int,
     terrain_mask: torch.Tensor,
-    trajectory_x: list,
-    trajectory_y: list,
-    trajectory_val: list,
+    all_trajectory_x: list,
+    all_trajectory_y: list,
+    all_trajectory_val: list,
     final_x: float,
     final_y: float,
     final_val: float,
+    best_sample_idx: int,
     state: torch.Tensor,
     gaitnet,
     pos_to_idx: Callable,
@@ -318,8 +319,8 @@ def _generate_pga_debug_plot(
     """Generate debug visualization of PGA optimization.
     
     Creates a figure with:
-    - Left: Coarse grid evaluation of model value across valid terrain + optimization trajectory
-    - Right: Value evolution over iterations
+    - Left: Coarse grid evaluation of model value across valid terrain + all sample trajectories
+    - Right: Value evolution over iterations for all samples
     """
     # Create output directory
     output_dir = Path("data/debug-images")
@@ -407,39 +408,69 @@ def _generate_pga_debug_plot(
         alpha=np.where(terrain_np, 0, 0.3),
     )
     
-    # Plot optimization trajectory
-    if len(trajectory_x) > 0:
-        traj_x = np.array(trajectory_x)
-        traj_y = np.array(trajectory_y)
+    # Plot all sample trajectories
+    if len(all_trajectory_x) > 0:
+        num_iterations = len(all_trajectory_x)
+        num_samples = len(all_trajectory_x[0])
         
-        # Draw trajectory line
-        ax1.plot(traj_y, traj_x, 'w-', linewidth=2, alpha=0.8, label='Trajectory')
+        # Convert to arrays: (num_iterations, num_samples)
+        traj_x = np.array(all_trajectory_x)
+        traj_y = np.array(all_trajectory_y)
         
-        # Color points by iteration
-        colors = plt.cm.cool(np.linspace(0, 1, len(traj_x)))
-        for i in range(len(traj_x)):
-            ax1.scatter(traj_y[i], traj_x[i], c=[colors[i]], s=50, edgecolors='white', linewidth=0.5)
+        # Create color map for samples
+        sample_colors = plt.cm.tab10(np.linspace(0, 1, num_samples))
         
-        # Mark start and end
-        ax1.scatter(traj_y[0], traj_x[0], c='cyan', s=150, marker='o', edgecolors='black', linewidth=2, label='Start', zorder=10)
+        # Plot each sample's trajectory
+        for s in range(num_samples):
+            sample_x = traj_x[:, s]
+            sample_y = traj_y[:, s]
+            
+            # Draw trajectory line (thicker for best sample)
+            linewidth = 3 if s == best_sample_idx else 1
+            alpha = 1.0 if s == best_sample_idx else 0.5
+            ax1.plot(sample_y, sample_x, '-', color=sample_colors[s], 
+                    linewidth=linewidth, alpha=alpha)
+            
+            # Mark start position
+            ax1.scatter(sample_y[0], sample_x[0], c=[sample_colors[s]], 
+                       s=80, marker='o', edgecolors='white', linewidth=1, zorder=10)
+            
+            # Mark end position (before final selection)
+            ax1.scatter(sample_y[-1], sample_x[-1], c=[sample_colors[s]], 
+                       s=80, marker='s', edgecolors='white', linewidth=1, zorder=10)
     
     # Mark final best position
-    ax1.scatter(final_y, final_x, c='red', s=200, marker='*', edgecolors='black', linewidth=2, label='Final', zorder=11)
+    ax1.scatter(final_y, final_x, c='red', s=300, marker='*', edgecolors='black', linewidth=2, label='Final Best', zorder=11)
     
     ax1.set_xlabel('Y (m)')
     ax1.set_ylabel('X (m)')
     ax1.set_title(f'PGA Value Landscape (Leg {leg})\nFinal value: {final_val:.4f}')
     ax1.legend(loc='upper right')
     
-    # Right plot: Value evolution over iterations
+    # Right plot: Value evolution over iterations for all samples
     ax2 = axes[1]
-    iterations = list(range(len(trajectory_val)))
-    ax2.plot(iterations, trajectory_val, 'b-o', linewidth=2, markersize=6)
-    ax2.axhline(y=final_val, color='r', linestyle='--', label=f'Final: {final_val:.4f}')
+    if len(all_trajectory_val) > 0:
+        num_iterations = len(all_trajectory_val)
+        num_samples = len(all_trajectory_val[0])
+        iterations = list(range(num_iterations))
+        
+        # Convert to array: (num_iterations, num_samples)
+        traj_val = np.array(all_trajectory_val)
+        
+        # Plot each sample's value evolution
+        for s in range(num_samples):
+            linewidth = 2 if s == best_sample_idx else 1
+            alpha = 1.0 if s == best_sample_idx else 0.4
+            label = f'Sample {s} (best)' if s == best_sample_idx else None
+            ax2.plot(iterations, traj_val[:, s], '-o', color=sample_colors[s],
+                    linewidth=linewidth, markersize=4, alpha=alpha, label=label)
+        
+        ax2.axhline(y=final_val, color='r', linestyle='--', linewidth=2, label=f'Final: {final_val:.4f}')
+    
     ax2.set_xlabel('Iteration')
-    ax2.set_ylabel('Best Sample Value')
-    ax2.set_title('Value Evolution During PGA')
-    ax2.legend()
+    ax2.set_ylabel('Sample Value')
+    ax2.set_title('Value Evolution During PGA (All Samples)')
+    ax2.legend(loc='best')
     ax2.grid(True, alpha=0.3)
     
     plt.tight_layout()

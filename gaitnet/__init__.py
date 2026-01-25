@@ -22,6 +22,7 @@ class ProjectRelativeFormatter(logging.Formatter):
     """Custom formatter that shows file path relative to project root."""
 
     def format(self, record: logging.LogRecord) -> str:
+        print(record)
         try:
             path = Path(record.pathname).resolve()
             record.relpath = path.relative_to(PROJECT_ROOT)
@@ -125,7 +126,7 @@ def get_logger():
         return logging.getLogger("src.unknown")
     frame = frame.f_back
     filename = frame.f_code.co_filename
-    rel_path = Path(filename).relative_to(PROJECT_ROOT / "gaitnet")
+    rel_path = Path(filename).relative_to(PROJECT_ROOT)
     module_name = str(rel_path).replace("/", ".").replace("\\", ".").replace(".py", "")
     return logging.getLogger("gaitnet." + module_name)
 

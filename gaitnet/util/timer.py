@@ -144,6 +144,7 @@ class Timer(ContextDecorator):
         """Stop timing."""
         self.stop()
         # print message
+        print(self._elapsed_time)
         if self._msg is not None:
             self._logger.log(self._log_level, self._msg+f": {self._elapsed_time:0.6f} seconds")
 
