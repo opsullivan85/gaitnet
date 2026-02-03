@@ -75,7 +75,7 @@ else:
     log_file = None
 
 # Root logger
-logger = logging.getLogger("src")
+logger = logging.getLogger("gaitnet")
 logger.setLevel(logging.DEBUG)
 
 # Console handler
@@ -120,10 +120,10 @@ except AttributeError:
 
 
 def get_logger():
-    """Get a logger with name relative to the src directory."""
+    """Get a logger with name relative to the gaitnet directory."""
     frame = inspect.currentframe()
     if frame is None or frame.f_back is None:
-        return logging.getLogger("src.unknown")
+        return logging.getLogger("gaitnet.unknown")
     frame = frame.f_back
     filename = frame.f_code.co_filename
     rel_path = Path(filename).relative_to(PROJECT_ROOT)
