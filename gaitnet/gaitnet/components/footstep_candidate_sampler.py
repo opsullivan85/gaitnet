@@ -2,7 +2,7 @@ _debug_footstep_cost_map_all = False
 _debug_footstep_cost_map = False | _debug_footstep_cost_map_all
 
 import gaitnet.constants as const
-from gaitnet.gaitnet.env_cfg.get_terrain_mask import get_terrain_mask
+from gaitnet.gaitnet.env_cfg.observations_utils import get_terrain_mask
 if not const.experiments.random_footstep_sampling:
     from gaitnet.contactnet.contactnet import CostMapGenerator
 
