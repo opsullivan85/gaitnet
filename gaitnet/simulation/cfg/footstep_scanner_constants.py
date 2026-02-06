@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Holds constants for footstep scanner configuration
 
 Does not require starting IsaacGym, so can be imported in other places

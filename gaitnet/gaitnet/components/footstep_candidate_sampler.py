@@ -1,3 +1,4 @@
+from __future__ import annotations
 _debug_footstep_cost_map_all = False 
 _debug_footstep_cost_map = False | _debug_footstep_cost_map_all
 
@@ -20,6 +21,8 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from gaitnet.gaitnet.actions.mpc_action import ManagerBasedEnv
+else:
+    ManagerBasedEnv = object
 
 class FootstepCandidateSampler:
     def __init__(self, env: ManagerBasedEnv, options_per_leg: int, noise: bool = True):
