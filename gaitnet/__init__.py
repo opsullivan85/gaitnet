@@ -126,7 +126,10 @@ def get_logger():
         return logging.getLogger("gaitnet.unknown")
     frame = frame.f_back
     filename = frame.f_code.co_filename
-    rel_path = Path(filename).relative_to(PROJECT_ROOT)
+    try:
+        rel_path = Path(filename).relative_to(PROJECT_ROOT)
+    except ValueError:
+        rel_path = Path(filename)
     module_name = str(rel_path).replace("/", ".").replace("\\", ".").replace(".py", "")
     return logging.getLogger("gaitnet." + module_name)
 
