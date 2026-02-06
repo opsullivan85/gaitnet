@@ -1,7 +1,17 @@
+from __future__ import annotations
 from abc import ABC, abstractmethod
 
 import numpy as np
-from nptyping import Float32, NDArray, Shape, Bool
+from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from nptyping import Float32, NDArray, Shape, Bool
+else:
+    from typing import Any
+    Float32 = Any
+    NDArray = Any
+    Shape = Any
+    Bool = Any
 
 from gaitnet import get_logger
 logger = get_logger()

@@ -1,20 +1,17 @@
 import numpy as np
 import torch
-try:
-    from isaaclab.envs import mdp
-    from isaaclab.managers import ObservationGroupCfg as ObsGroup
-    from isaaclab.managers import ObservationTermCfg as ObsTerm
-    from isaaclab.managers import SceneEntityCfg
-    from isaaclab.utils import configclass
-    from isaaclab.utils.noise import AdditiveUniformNoiseCfg as Unoise
-    from isaaclab.envs import ManagerBasedEnv
-    from isaaclab.envs.utils.io_descriptors import (
-        generic_io_descriptor,
-        record_dtype,
-        record_shape,
-    )
-except ImportError:
-    pass
+from isaaclab.envs import mdp
+from isaaclab.managers import ObservationGroupCfg as ObsGroup
+from isaaclab.managers import ObservationTermCfg as ObsTerm
+from isaaclab.managers import SceneEntityCfg
+from isaaclab.utils import configclass
+from isaaclab.utils.noise import AdditiveUniformNoiseCfg as Unoise
+from isaaclab.envs import ManagerBasedEnv
+from isaaclab.envs.utils.io_descriptors import (
+    generic_io_descriptor,
+    record_dtype,
+    record_shape,
+)
 import torch.nn.functional as F
 from gaitnet.util.vectorpool import VectorPool
 from gaitnet.sim2real.abstractinterface import Sim2RealInterface
@@ -144,9 +141,6 @@ def cspace_height_scan(
     return height_scan
 
 
-contact_state_indices = np.asarray([18, 19, 20, 21])
-
-
 @configclass
 class ObservationsCfg:
     """Observation specifications for the MDP."""
@@ -230,26 +224,3 @@ class ObservationsCfg:
     policy: PolicyCfg = PolicyCfg()
 
 
-def get_terrain_mask(
-    valid_height_range: tuple[float, float], obs: torch.Tensor
-) -> torch.Tensor:
-    """Get a mask for the terrain observations.
-
-    0 indicates invalid terrain (too high or too low)
-    1 indicates valid terrain
-    """
-    terrain_terms = (
-        const.footstep_scanner.grid_size[0] * const.footstep_scanner.grid_size[1] * const.robot.num_legs
-    )
-    terrain_obs = obs[:, -terrain_terms:]
-    # reshape to (N, 4, H, W)
-    terrain_obs = terrain_obs.reshape(
-        terrain_obs.shape[0],
-        const.robot.num_legs,
-        const.footstep_scanner.grid_size[0],
-        const.footstep_scanner.grid_size[1],
-    )
-    # mask out values outside of allowed height range
-    min_height, max_height = valid_height_range
-    terrain_mask = (terrain_obs > min_height) & (terrain_obs < max_height)
-    return terrain_mask

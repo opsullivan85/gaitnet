@@ -2,6 +2,7 @@ _debug_footstep_cost_map_all = False
 _debug_footstep_cost_map = False | _debug_footstep_cost_map_all
 
 import gaitnet.constants as const
+from gaitnet.gaitnet.env_cfg.get_terrain_mask import get_terrain_mask
 if not const.experiments.random_footstep_sampling:
     from gaitnet.contactnet.contactnet import CostMapGenerator
 
@@ -9,7 +10,7 @@ if _debug_footstep_cost_map_all or _debug_footstep_cost_map:
     from gaitnet.contactnet.debug import view_footstep_cost_map
 
 from gaitnet.constants import NO_STEP
-from gaitnet.gaitnet.env_cfg.observations import contact_state_indices, get_terrain_mask
+from gaitnet.gaitnet.env_cfg.observations_utils import contact_state_indices
 from gaitnet.simulation.cfg.footstep_scanner_constants import idx_to_xy
 from gaitnet.util.math import seeded_uniform_noise
 

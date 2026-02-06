@@ -39,7 +39,7 @@ import re
 from pathlib import Path
 import gaitnet.constants as const
 from gaitnet.eval.components.fixed_velocity_command import FixedVelocityCommand, FixedVelocityCommandCfg
-from gaitnet.gaitnet.env_cfg.observations import contact_state_indices
+from gaitnet.gaitnet.env_cfg.observations_utils import contact_state_indices
 from gaitnet import GIT_COMMIT, get_logger
 
 logger = get_logger()

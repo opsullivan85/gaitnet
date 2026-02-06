@@ -3,7 +3,7 @@ from typing import Callable
 import numpy as np
 from isaaclab.envs import ManagerBasedEnv
 import torch
-from gaitnet.sim2real import SimInterface
+from gaitnet.sim2real.siminterface import SimInterface
 from gaitnet.util import VectorPool
 from abc import abstractmethod, ABC
 from gaitnet.contactnet.debug import view_footstep_cost_map
