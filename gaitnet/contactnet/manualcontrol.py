@@ -31,8 +31,6 @@ import torch
 import torch.nn as nn
 
 from isaaclab.envs import ManagerBasedEnv
-import gaitnet
-from gaitnet import control
 from gaitnet.contactnet.debug import view_footstep_cost_map
 from gaitnet.contactnet.contactnet import FootstepDataset, ContactNet
 from gaitnet.contactnet.util import get_checkpoint_path, get_dataset_paths

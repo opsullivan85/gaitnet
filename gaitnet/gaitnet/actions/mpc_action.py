@@ -1,7 +1,7 @@
 """Action for running low level control with an MPC"""
 
 from dataclasses import MISSING
-from typing import Any, Sequence
+from typing import Sequence
 from isaaclab.assets import Articulation
 from isaaclab.envs import ManagerBasedEnv, ManagerBasedRLEnv
 from isaaclab.managers import ActionTerm, ActionTermCfg
@@ -11,7 +11,6 @@ import torch
 from gaitnet import sim2real
 from gaitnet.util import VectorPool
 from gaitnet.simulation.util import controls_to_joint_efforts
-import numpy as np
 from gaitnet import get_logger
 
 logger = get_logger()

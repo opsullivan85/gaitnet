@@ -44,7 +44,7 @@ from gaitnet.eval.components.fixed_velocity_command import (
 from gaitnet import GIT_COMMIT, get_logger
 from gaitnet.util.pga import generate_footstep_action
 from gaitnet.simulation.cfg.footstep_scanner_constants import xy_to_idx, idx_to_xy
-from gaitnet.gaitnet.actions.footstep_action import NO_STEP
+from gaitnet.constants import NO_STEP
 
 logger = get_logger()
 

@@ -9,7 +9,6 @@ from isaaclab.managers import (
     RewardManager,
     TerminationManager,
 )
-import copy
 
 from gaitnet import get_logger
 from gaitnet.gaitnet.actions.mpc_action import ManagerBasedEnv

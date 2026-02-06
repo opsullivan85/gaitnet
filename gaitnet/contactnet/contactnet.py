@@ -9,12 +9,10 @@ from pathlib import Path
 from typing import List, Tuple
 from datetime import datetime
 import gaitnet
-from isaaclab.envs import ManagerBasedRLEnv
 from gaitnet.contactnet.tree import IsaacStateCPU, StepNode
 from gaitnet import PROJECT_ROOT
 from gaitnet.contactnet.util import get_checkpoint_path, get_dataset_paths
 from gaitnet import get_logger
-import gaitnet.simulation.cfg.footstep_scanner_constants as fs
 import gaitnet.constants as const
 import sys
 

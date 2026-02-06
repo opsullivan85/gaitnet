@@ -1,8 +1,14 @@
-import random
+_debug_footstep_cost_map_all = False 
+_debug_footstep_cost_map = False | _debug_footstep_cost_map_all
+
 import gaitnet.constants as const
-from gaitnet.contactnet.contactnet import CostMapGenerator
-from gaitnet.contactnet.debug import view_footstep_cost_map
-from gaitnet.gaitnet.actions.footstep_action import NO_STEP
+if not const.experiments.random_footstep_sampling:
+    from gaitnet.contactnet.contactnet import CostMapGenerator
+
+if _debug_footstep_cost_map_all or _debug_footstep_cost_map:
+    from gaitnet.contactnet.debug import view_footstep_cost_map
+
+from gaitnet.constants import NO_STEP
 from gaitnet.gaitnet.actions.mpc_action import ManagerBasedEnv
 from gaitnet.gaitnet.env_cfg.observations import contact_state_indices, get_terrain_mask
 from gaitnet.simulation.cfg.footstep_scanner_constants import idx_to_xy
@@ -11,13 +17,11 @@ from gaitnet.util.math import seeded_uniform_noise
 import torch
 import torch.nn as nn
 
-_debug_footstep_cost_map = False
-_debug_footstep_cost_map_all = False
-
 class FootstepCandidateSampler:
     def __init__(self, env: ManagerBasedEnv, options_per_leg: int, noise: bool = True):
         self.env = env
-        self.cost_map_generator = CostMapGenerator(device=env.device)
+        if not const.experiments.random_footstep_sampling:
+            self.cost_map_generator = CostMapGenerator(device=env.device)
         self.options_per_leg = options_per_leg
         self.noise = noise
 

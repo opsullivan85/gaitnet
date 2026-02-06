@@ -1,3 +1,4 @@
+from __future__ import annotations
 import numpy as np
 from gaitnet import get_logger
 from dataclasses import dataclass, field
@@ -132,3 +133,5 @@ if experiments.random_footstep_sampling:
         "If random footstep sampling is enabled, "
         "then ablate_footstep_cost must also be enabled."
     )
+
+NO_STEP = -1  # special value for no step

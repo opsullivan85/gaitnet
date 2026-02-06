@@ -2,7 +2,7 @@ import argparse
 import pickle
 
 import numpy as np
-from gaitnet import PROJECT_ROOT, logger
+from gaitnet import logger
 from gaitnet.contactnet.debug import view_footstep_cost_map
 from gaitnet.contactnet.tree import StepNode
 import gaitnet.simulation.cfg.footstep_scanner_constants as fs

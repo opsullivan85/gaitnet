@@ -1,7 +1,7 @@
 """Action for running footstep controller"""
 
-from dataclasses import MISSING
-from typing import Any, Sequence
+from typing import Sequence
+from gaitnet.constants import NO_STEP
 from isaaclab.assets import Articulation
 from isaaclab.envs import ManagerBasedEnv
 from isaaclab.managers import ActionTerm, ActionTermCfg
@@ -10,7 +10,6 @@ import torch
 
 from gaitnet import sim2real
 from gaitnet.util import VectorPool
-from gaitnet.simulation.util import controls_to_joint_efforts
 import numpy as np
 import gaitnet.constants as const
 from gaitnet import get_logger, PROJECT_ROOT
@@ -23,8 +22,6 @@ if TYPE_CHECKING:
     )
 
 logger = get_logger()
-
-NO_STEP = -1  # special value for no step
 
 if (
     const.experiments.contact_schedule_logging

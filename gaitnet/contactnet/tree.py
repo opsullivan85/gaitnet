@@ -5,7 +5,7 @@ import anytree
 import torch
 
 import numpy as np
-from nptyping import Float32, NDArray, Shape, Bool
+from nptyping import Float32, NDArray, Shape
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedEnv
