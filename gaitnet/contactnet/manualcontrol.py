@@ -5,7 +5,7 @@ import signal
 from isaaclab.app import AppLauncher
 from gaitnet.contactnet import tree
 from gaitnet.contactnet.datagen import check_dones, args
-from gaitnet.sim2real import SimInterface
+from gaitnet.sim2real.siminterface import SimInterface
 from gaitnet.simulation.util import controls_to_joint_efforts, reset_all_to
 
 # # add argparse arguments

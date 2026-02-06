@@ -5,7 +5,7 @@ from isaaclab.envs import ManagerBasedRLEnv, mdp
 import isaaclab_tasks.manager_based.locomotion.velocity.config.spot.mdp as spot_mdp  # type: ignore
 from isaaclab.managers import RewardTermCfg as RewTerm, SceneEntityCfg
 from isaaclab.utils import configclass
-from gaitnet.sim2real import Sim2RealInterface
+from gaitnet.sim2real.siminterface import Sim2RealInterface
 import gaitnet.constants as const
 
 

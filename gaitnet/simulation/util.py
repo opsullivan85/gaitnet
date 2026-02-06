@@ -4,7 +4,7 @@ import torch
 from isaaclab.envs import ManagerBasedEnv
 from isaaclab.envs.mdp import joint_pos
 from isaaclab.scene import InteractiveScene
-from gaitnet.sim2real import SimInterface
+from gaitnet.sim2real.siminterface import SimInterface
 from gaitnet.util.vectorpool import VectorPool
 
 

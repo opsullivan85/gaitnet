@@ -26,7 +26,7 @@ import torch
 
 from isaaclab.envs import ManagerBasedRLEnv, ManagerBasedEnv
 
-from gaitnet.sim2real import SimInterface
+from gaitnet.sim2real.siminterface import SimInterface
 from gaitnet.util import VectorPool
 from gaitnet.simulation.util import controls_to_joint_efforts, reset_all_to
 from gaitnet.util.data_logging import data_logger

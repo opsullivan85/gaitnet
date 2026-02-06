@@ -50,7 +50,7 @@ from isaaclab.envs.mdp import rewards
 import itertools
 
 import gaitnet.contactnet.costs as cn_costs
-from gaitnet.sim2real import SimInterface
+from gaitnet.sim2real.siminterface import SimInterface
 from gaitnet.simulation.util import controls_to_joint_efforts, reset_all_to
 from gaitnet.util import VectorPool
 from gaitnet.simulation.cfg.quadrupedenv import QuadrupedEnvCfg, get_quadruped_env_cfg

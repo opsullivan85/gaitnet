@@ -1,6 +1,8 @@
 
 import numpy as np
-from nptyping import Float32, NDArray, Shape, Bool
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from nptyping import Float32, NDArray, Shape, Bool
 
 try:
     from gaitnet.control import RobotRunnerMin, RobotType

@@ -1,18 +1,20 @@
 import numpy as np
 import torch
-from isaaclab.envs import mdp
-from isaaclab.managers import ObservationGroupCfg as ObsGroup
-from isaaclab.managers import ObservationTermCfg as ObsTerm
-from isaaclab.managers import SceneEntityCfg
-from isaaclab.sensors import ContactSensor, RayCaster
-from isaaclab.utils import configclass
-from isaaclab.utils.noise import AdditiveUniformNoiseCfg as Unoise
-from gaitnet.gaitnet.actions.mpc_action import ManagerBasedEnv
-from isaaclab.envs.utils.io_descriptors import (
-    generic_io_descriptor,
-    record_dtype,
-    record_shape,
-)
+try:
+    from isaaclab.envs import mdp
+    from isaaclab.managers import ObservationGroupCfg as ObsGroup
+    from isaaclab.managers import ObservationTermCfg as ObsTerm
+    from isaaclab.managers import SceneEntityCfg
+    from isaaclab.utils import configclass
+    from isaaclab.utils.noise import AdditiveUniformNoiseCfg as Unoise
+    from isaaclab.envs import ManagerBasedEnv
+    from isaaclab.envs.utils.io_descriptors import (
+        generic_io_descriptor,
+        record_dtype,
+        record_shape,
+    )
+except ImportError:
+    pass
 import torch.nn.functional as F
 from gaitnet.util.vectorpool import VectorPool
 from gaitnet.sim2real.abstractinterface import Sim2RealInterface

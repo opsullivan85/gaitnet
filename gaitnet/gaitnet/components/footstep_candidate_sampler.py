@@ -9,13 +9,16 @@ if _debug_footstep_cost_map_all or _debug_footstep_cost_map:
     from gaitnet.contactnet.debug import view_footstep_cost_map
 
 from gaitnet.constants import NO_STEP
-from gaitnet.gaitnet.actions.mpc_action import ManagerBasedEnv
 from gaitnet.gaitnet.env_cfg.observations import contact_state_indices, get_terrain_mask
 from gaitnet.simulation.cfg.footstep_scanner_constants import idx_to_xy
 from gaitnet.util.math import seeded_uniform_noise
 
 import torch
 import torch.nn as nn
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from gaitnet.gaitnet.actions.mpc_action import ManagerBasedEnv
 
 class FootstepCandidateSampler:
     def __init__(self, env: ManagerBasedEnv, options_per_leg: int, noise: bool = True):

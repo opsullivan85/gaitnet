@@ -1,3 +1,4 @@
+from __future__ import annotations
 import inspect
 import traceback
 from multiprocessing import Pipe, Process, cpu_count
@@ -5,12 +6,15 @@ from multiprocessing.connection import Connection
 from typing import Any, Callable, Generic, Type, TypeVar
 
 import numpy as np
-from nptyping import NDArray, Shape, Bool, Number
 
 import enum
 
 from gaitnet import get_logger
 logger = get_logger()
+
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from nptyping import NDArray, Shape, Bool, Number
 
 
 class Message:

@@ -2,7 +2,7 @@
 from isaaclab.envs import ManagerBasedRLEnvCfg  # type: ignore
 from isaaclab.utils import configclass  # type: ignore
 
-from gaitnet.sim2real import SimInterface
+from gaitnet.sim2real.siminterface import SimInterface
 from gaitnet.util import VectorPool
 from gaitnet.simulation.cfg.manager_components import (
     ActionsCfg,

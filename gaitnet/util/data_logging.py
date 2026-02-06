@@ -1,20 +1,19 @@
-from pathlib import Path
-from typing import Any, TypeAlias
+from __future__ import annotations
 import numpy as np
-import torch
-from gaitnet import timestamp, PROJECT_ROOT
-import atexit
-from time import time
-import matplotlib.pyplot as plt
+from gaitnet import PROJECT_ROOT
 from datetime import datetime
 
 from gaitnet import get_logger
 
 logger = get_logger()
+try:
+    import matplotlib.pyplot as plt
+except ImportError:
+    logger.warning("matplotlib not found, image saving disabled")
 
 # Ensure images directory exists
 image_dir = PROJECT_ROOT / "data" / "debug-images"
-image_dir.mkdir(exist_ok=True)
+image_dir.mkdir(parents=True, exist_ok=True)
 
 # Delete all old images
 for file in image_dir.iterdir():

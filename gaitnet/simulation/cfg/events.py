@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 from isaaclab.envs import ManagerBasedRLEnv
-from gaitnet.sim2real import SimInterface
+from gaitnet.sim2real.siminterface import SimInterface
 from gaitnet.util.vectorpool import VectorPool
 
 
