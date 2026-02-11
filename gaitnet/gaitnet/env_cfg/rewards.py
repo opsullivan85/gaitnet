@@ -73,7 +73,7 @@ class RewardsCfg:
     no_op = RewTerm(func=no_op_reward, weight=0.0)  # set with curriculum
     xy_tracking = RewTerm(
         func=mdp.track_lin_vel_xy_exp,
-        weight=0.5,
+        weight=0.25,
         params={
             "std": 0.5,
             "command_name": "base_velocity",
@@ -81,7 +81,7 @@ class RewardsCfg:
     )
     yaw_tracking = RewTerm(
         func=mdp.track_ang_vel_z_exp,
-        weight=0.5,
+        weight=0.25,
         params={
             "std": 0.5,
             "command_name": "base_velocity",
@@ -92,18 +92,18 @@ class RewardsCfg:
     op_penalty = RewTerm(func=op_reward, weight=-2.5)  # set with curriculum
     terminating = RewTerm(func=mdp.is_terminated, weight=-200.0)
     joint_accelerations = RewTerm(func=mdp.joint_acc_l2, weight=0)  # set with curriculum
-    lin_vel_z_l2 = RewTerm(func=mdp.lin_vel_z_l2, weight=-2.5)
-    ang_vel_xy_l2 = RewTerm(func=mdp.ang_vel_xy_l2, weight=-0.1)
-    flat_orientation_l2 = RewTerm(func=mdp.flat_orientation_l2, weight=-8.0)
-    foot_slip = RewTerm(
-        func=spot_mdp.foot_slip_penalty,
-        weight=-6,
-        params={
-            "asset_cfg": SceneEntityCfg("robot", body_names=".*_foot"),
-            "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_foot"),
-            "threshold": 1.0,
-        },
-    )
+    # lin_vel_z_l2 = RewTerm(func=mdp.lin_vel_z_l2, weight=-2.5)
+    # ang_vel_xy_l2 = RewTerm(func=mdp.ang_vel_xy_l2, weight=-0.1)
+    # flat_orientation_l2 = RewTerm(func=mdp.flat_orientation_l2, weight=-8.0)
+    # foot_slip = RewTerm(
+    #     func=spot_mdp.foot_slip_penalty,
+    #     weight=-6,
+    #     params={
+    #         "asset_cfg": SceneEntityCfg("robot", body_names=".*_foot"),
+    #         "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_foot"),
+    #         "threshold": 1.0,
+    #     },
+    # )
     # foot_too_low = RewTerm(
     #     func=height_below_minimum,
     #     weight=-1,
