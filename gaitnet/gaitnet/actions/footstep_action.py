@@ -8,7 +8,7 @@ from isaaclab.managers import ActionTerm, ActionTermCfg
 from isaaclab.utils import configclass
 import torch
 
-from gaitnet import sim2real
+from gaitnet.sim2real.siminterface import Sim2RealInterface, SimInterface
 from gaitnet.util import VectorPool
 import numpy as np
 import gaitnet.constants as const
@@ -218,9 +218,9 @@ class FSCActionTerm(ActionTerm):
         footstep_parameters = self.footstep_kwargs(processed_actions_cpu)
 
         # initiate the footsteps
-        robot_controllers: VectorPool[sim2real.Sim2RealInterface] = self.env_cfg.robot_controllers  # type: ignore
+        robot_controllers: VectorPool[Sim2RealInterface] = self.env_cfg.robot_controllers  # type: ignore
         robot_controllers.call(
-            function=sim2real.Sim2RealInterface.initiate_footstep,
+            function=Sim2RealInterface.initiate_footstep,
             mask=mask,
             **footstep_parameters,
         )

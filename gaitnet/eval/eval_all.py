@@ -179,7 +179,7 @@ def main():
             str(speed),
             "--headless",
             "--trials",
-            "3",
+            "1",
             "--num_envs",
             "50",
             "--no-log-file",

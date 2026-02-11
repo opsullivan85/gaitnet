@@ -3,7 +3,7 @@ from isaaclab.envs import ManagerBasedRLEnv, ManagerBasedRLEnvCfg
 from isaaclab.sensors import SensorBaseCfg
 from isaaclab.utils import configclass
 
-from gaitnet import sim2real
+from gaitnet.sim2real.siminterface import Sim2RealInterface, SimInterface
 from gaitnet.gaitnet.env_cfg.curriculum import CurriculumCfg
 from gaitnet.simulation.cfg.scene import SceneCfg
 import numpy as np
@@ -36,7 +36,7 @@ class GaitNetEnvCfg(ManagerBasedRLEnvCfg):
     commands: CommandsCfg = CommandsCfg()  # type: ignore
     curriculum: CurriculumCfg = CurriculumCfg()  # type: ignore
 
-    robot_controllers: VectorPool[sim2real.Sim2RealInterface] = None  # type: ignore to be set later
+    robot_controllers: VectorPool[Sim2RealInterface] = None  # type: ignore to be set later
 
     # TODO: do this the right way
     # ['trunk', 'FL_hip', 'FR_hip', 'RL_hip', 'RR_hip', 'FL_thigh', 'FR_thigh', 'RL_thigh', 'RR_thigh', 'FL_calf', 'FR_calf', 'RL_calf', 'RR_calf', 'FL_foot', 'FR_foot', 'RL_foot', 'RR_foot']
@@ -88,9 +88,9 @@ def update_controllers(
         envcfg (GaitNetEnvCfg): The environment configuration.
         controllers (VectorPool[sim2real.Sim2RealInterface]): The controllers to set.
     """
-    controllers: VectorPool[sim2real.Sim2RealInterface] = VectorPool(
+    controllers: VectorPool[Sim2RealInterface] = VectorPool(
         instances=num_envs,
-        cls=sim2real.SimInterface,
+        cls=SimInterface,
         dt=cfg.sim.dt,  # 250 Hz leg PD control
         iterations_between_mpc=5,  # 50 Hz MPC
         debug_logging=False,
