@@ -50,48 +50,58 @@ def precompute_distance_transform(
 def project_to_valid_terrain(
     x: torch.Tensor,
     y: torch.Tensor,
+    terrain_mask: torch.Tensor,
     nearest_i: torch.Tensor,
     nearest_j: torch.Tensor,
     pos_to_idx: Callable,
     idx_to_pos: Callable,
 ) -> Tuple[torch.Tensor, torch.Tensor]:
-    """Project positions to nearest valid terrain.
+    """Project positions to nearest valid terrain, leaving already-valid positions untouched.
+
+    Samples whose current (x, y) already lands on valid terrain (and in-bounds) are passed
+    through unchanged, so optimization can move continuously within a grid cell instead of
+    being re-snapped to the cell center every iteration. Only samples that land on invalid
+    terrain (or out of bounds) are projected to their nearest valid cell center.
 
     Args:
         x, y: (batch, num_samples) continuous coordinates in meters
+        terrain_mask: (batch, height, width) binary mask where 1=valid, 0=invalid
         nearest_i, nearest_j: (batch, height, width) precomputed nearest valid indices
         pos_to_idx: function to convert continuous coords to grid indices
         idx_to_pos: function to convert grid indices back to continuous coords
 
     Returns:
-        x_proj, y_proj: (batch, num_samples) projected valid coordinates in meters
+        x_proj, y_proj: (batch, num_samples) valid coordinates in meters
     """
     batch_size, num_samples = x.shape
     device = x.device
-    
+
     # Convert continuous coords to grid indices
     xy = torch.stack([x, y], dim=-1)  # (batch, num_samples, 2)
     indices, in_bounds = pos_to_idx(xy)  # indices: (batch, num_samples, 2)
-    
+
     # Clamp indices to valid range for lookup
     height, width = nearest_i.shape[1], nearest_i.shape[2]
     idx_i = indices[..., 0].clamp(0, height - 1).long()  # (batch, num_samples)
     idx_j = indices[..., 1].clamp(0, width - 1).long()   # (batch, num_samples)
-    
+
     # Look up nearest valid indices for each sample
     # nearest_i/j are (batch, height, width), we need to gather at (idx_i, idx_j)
     batch_indices = torch.arange(batch_size, device=device).unsqueeze(1).expand(-1, num_samples)
-    
+
+    # Samples already on valid, in-bounds terrain don't need projecting
+    currently_valid = terrain_mask[batch_indices, idx_i, idx_j].bool() & in_bounds
+
     proj_i = nearest_i[batch_indices, idx_i, idx_j]  # (batch, num_samples)
     proj_j = nearest_j[batch_indices, idx_i, idx_j]  # (batch, num_samples)
-    
+
     # Convert projected indices back to continuous coordinates
     proj_indices = torch.stack([proj_i, proj_j], dim=-1)  # (batch, num_samples, 2)
     proj_xy = idx_to_pos(proj_indices)  # (batch, num_samples, 2)
-    
-    x_proj = proj_xy[..., 0]
-    y_proj = proj_xy[..., 1]
-    
+
+    x_proj = torch.where(currently_valid, x, proj_xy[..., 0])
+    y_proj = torch.where(currently_valid, y, proj_xy[..., 1])
+
     return x_proj, y_proj
 
 
@@ -173,7 +183,7 @@ def generate_footstep_action(
         y = torch.randn(batch_size, num_samples, device=device) * 0.1
     
     # Project initial samples to valid terrain
-    x, y = project_to_valid_terrain(x, y, nearest_i, nearest_j, pos_to_idx, idx_to_pos)
+    x, y = project_to_valid_terrain(x, y, terrain_mask, nearest_i, nearest_j, pos_to_idx, idx_to_pos)
     
     # Create leg one-hot encoding: (batch, num_samples, 5)
     # Note: one-hot is [no_op, leg0, leg1, leg2, leg3], so add 1 to leg index
@@ -231,8 +241,8 @@ def generate_footstep_action(
             x = x + learning_rate * x.grad
             y = y + learning_rate * y.grad
             
-            # Project back to valid terrain
-            x, y = project_to_valid_terrain(x, y, nearest_i, nearest_j, pos_to_idx, idx_to_pos)
+            # Project back to valid terrain only if the gradient step left valid terrain
+            x, y = project_to_valid_terrain(x, y, terrain_mask, nearest_i, nearest_j, pos_to_idx, idx_to_pos)
     
     # Final evaluation to get values and durations
     with torch.no_grad():
