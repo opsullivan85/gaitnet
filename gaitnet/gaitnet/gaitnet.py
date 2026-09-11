@@ -276,7 +276,8 @@ class GaitnetCritic(nn.Module):
             # remove the extra dimension
             unique_state = unique_state.squeeze(1)
             # check if this is a no-op state
-            no_op_mask = unique_state[:, 4] == 1
+            # note that the one hot encoding is [no_op, leg1, leg2, leg3, leg4]
+            no_op_mask = unique_state[:, 0] == 1
             # also treat high cost as no-op
             no_op_mask = no_op_mask | (unique_state[:, -1] >= 2.0)
 
