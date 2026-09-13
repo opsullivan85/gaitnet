@@ -128,12 +128,12 @@ def main():
             # how many times to use each batch of data for gradient updates
             "num_learning_epochs": 16,
             # number of minibatches to split one batch of data into
-            "num_mini_batches": 4,
+            "num_mini_batches": 8,
             "value_loss_coef": 0.5,
             # controls entropy - higher = more exploration, slower convergence
-            "entropy_coef": 0.04,
+            "entropy_coef": 0.08,
             # learning rate
-            "learning_rate": 3e-4,
+            "learning_rate": 2e-4,
             # clips gradients to prevent unstable training
             "max_grad_norm": 1.0,
             "use_clipped_value_loss": True,
