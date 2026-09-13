@@ -89,8 +89,8 @@ class RewardsCfg:
     )
 
     # penalties
-    op_penalty = RewTerm(func=op_reward, weight=-1.5)  # set with curriculum
-    terminating = RewTerm(func=mdp.is_terminated, weight=-600.0)
+    op_penalty = RewTerm(func=op_reward, weight=-0.3)  # set with curriculum
+    terminating = RewTerm(func=mdp.is_terminated, weight=-100.0)
     joint_accelerations = RewTerm(func=mdp.joint_acc_l2, weight=0)  # set with curriculum
     lin_vel_z_l2 = RewTerm(func=mdp.lin_vel_z_l2, weight=-2.5)
     ang_vel_xy_l2 = RewTerm(func=mdp.ang_vel_xy_l2, weight=-0.1)
@@ -104,11 +104,11 @@ class RewardsCfg:
             "threshold": 1.0,
         },
     )
-    # foot_too_low = RewTerm(
-    #     func=height_below_minimum,
-    #     weight=-1,
-    #     params={
-    #         "asset_cfg": SceneEntityCfg("robot", body_names=".*_foot"),
-    #         "minimum_height": 0.0,
-    #     },
-    # )
+    foot_too_low = RewTerm(
+        func=height_below_minimum,
+        weight=-1,
+        params={
+            "asset_cfg": SceneEntityCfg("robot", body_names=".*_foot"),
+            "minimum_height": 0.0,
+        },
+    )
