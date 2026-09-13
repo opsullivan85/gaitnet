@@ -126,12 +126,12 @@ def main():
             # specified the proximal part of PPO - larger = faster at cost of stability
             "clip_param": 0.3,
             # how many times to use each batch of data for gradient updates
-            "num_learning_epochs": 8,
+            "num_learning_epochs": 16,
             # number of minibatches to split one batch of data into
             "num_mini_batches": 4,
             "value_loss_coef": 0.5,
             # controls entropy - higher = more exploration, slower convergence
-            "entropy_coef": 0.02,
+            "entropy_coef": 0.04,
             # learning rate
             "learning_rate": 3e-4,
             # clips gradients to prevent unstable training
@@ -139,7 +139,7 @@ def main():
             "use_clipped_value_loss": True,
             # decay rate of future rewards. Closer to 1 = long horizon, closer to 0 = short horizon
             # H=1/(1-gamma); 0.98 corresponds to 2s, 0.99 to 5s
-            "gamma": 0.99,
+            "gamma": 0.995,
             "lam": 0.95,
         },
         "policy": {
