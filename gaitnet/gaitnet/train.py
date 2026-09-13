@@ -133,7 +133,7 @@ def main():
             # controls entropy - higher = more exploration, slower convergence
             "entropy_coef": 0.08,
             # learning rate
-            "learning_rate": 2e-4,
+            "learning_rate": 6e-4,
             # clips gradients to prevent unstable training
             "max_grad_norm": 1.0,
             "use_clipped_value_loss": True,
