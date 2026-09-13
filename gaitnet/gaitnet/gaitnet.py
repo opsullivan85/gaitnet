@@ -57,7 +57,6 @@ class GaitnetActor(nn.Module):
             input_size=shared_state_dim,
             hidden_sizes=shared_layer_sizes[:-1],
             output_size=shared_layer_sizes[-1],
-            output_activation=nn.ReLU,
         )
         logger.info(f"shared_encoder: {self.shared_encoder}")
 
@@ -65,7 +64,6 @@ class GaitnetActor(nn.Module):
             input_size=unique_state_dim,
             hidden_sizes=unique_layer_sizes[:-1],
             output_size=unique_layer_sizes[-1],
-            output_activation=nn.ReLU,
         )
         self.unique_embedding_size = unique_layer_sizes[-1]
         # random embedding to represent no-op
@@ -77,7 +75,6 @@ class GaitnetActor(nn.Module):
             input_size=trunk_input_dim,
             hidden_sizes=trunk_layer_sizes[:-1],
             output_size=trunk_layer_sizes[-1],
-            output_activation=nn.ReLU,
         )
         logger.info(f"trunk: {self.trunk}")
 
@@ -216,7 +213,6 @@ class GaitnetCritic(nn.Module):
             input_size=shared_state_dim,
             hidden_sizes=shared_layer_sizes[:-1],
             output_size=shared_layer_sizes[-1],
-            output_activation=nn.ReLU,
         )
         logger.info(f"shared_encoder: {self.shared_encoder}")
 
@@ -224,7 +220,6 @@ class GaitnetCritic(nn.Module):
             input_size=unique_state_dim,
             hidden_sizes=unique_layer_sizes[:-1],
             output_size=unique_layer_sizes[-1],
-            output_activation=nn.ReLU,
         )
         self.unique_embedding_size = unique_layer_sizes[-1]
         # random embedding to represent no-op
