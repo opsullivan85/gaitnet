@@ -200,11 +200,7 @@ class GaitnetCritic(nn.Module):
         self,
         shared_state_dim: int,
         shared_layer_sizes: Sequence[int],
-        num_unique_states: int,
-        unique_state_dim: int,
-        unique_layer_sizes: Sequence[int],
         trunk_layer_sizes: Sequence[int],
-        trunk_combiner_head_sizes: Sequence[int] = [32, 32],
     ):
         super().__init__()
         logger.info("GaitnetCritic initializing")
@@ -216,89 +212,31 @@ class GaitnetCritic(nn.Module):
         )
         logger.info(f"shared_encoder: {self.shared_encoder}")
 
-        self.unique_encoder = make_mlp(
-            input_size=unique_state_dim,
-            hidden_sizes=unique_layer_sizes[:-1],
-            output_size=unique_layer_sizes[-1],
-        )
-        self.unique_embedding_size = unique_layer_sizes[-1]
-        # random embedding to represent no-op
-        self.no_op_embedding = nn.Parameter(torch.randn(unique_layer_sizes[-1]))
-        logger.info(f"unique_encoder: {self.unique_encoder}")
-
-        trunk_input_dim = shared_layer_sizes[-1] + unique_layer_sizes[-1]
         self.trunk = make_mlp(
-            input_size=trunk_input_dim,
+            input_size=shared_layer_sizes[-1],
             hidden_sizes=trunk_layer_sizes,
             output_size=1,
         )
         logger.info(f"trunk: {self.trunk}")
 
-        self.trunk_combiner_head = make_mlp(
-            input_size=num_unique_states,
-            hidden_sizes=trunk_combiner_head_sizes,
-            output_size=1,
-        )
-        logger.info(f"trunk_combiner_head: {self.trunk_combiner_head}")
+    def forward(self, obs: torch.Tensor) -> torch.Tensor:
+        """Forward pass for the critic.
 
-    def forward(self, obs: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
-        """Forward pass for the MiMo network.
+        Only the shared robot state is used. The footstep-option candidates
+        are i.i.d. noise conditional on the state (their identities and
+        ordering come from the sampler's random tie-break), so they carry
+        ~no information about V(s) and are dropped rather than fed through
+        an order-sensitive combiner.
 
         Args:
             obs (torch.Tensor): Input observations.
 
         Returns:
-            tuple[torch.Tensor, torch.Tensor]: Value and duration predictions.
+            torch.Tensor: Value predictions (num_envs, 1).
         """
-        num_envs = obs.shape[0]
         shared_state = obs[:, : const.gait_net.robot_state_dim]
-
-        remaining_obs_size = obs.shape[1] - const.gait_net.robot_state_dim
-        unique_states_dim = remaining_obs_size / const.gait_net.footstep_option_dim
-        assert (
-            unique_states_dim.is_integer()
-        ), f"Expected unique_state_size ({const.gait_net.footstep_option_dim}) to evenly divide the remaining observation size ({remaining_obs_size}), got {unique_states_dim}"
-        unique_states_dim = int(unique_states_dim)
-        unique_states = obs[:, const.gait_net.robot_state_dim :].view(
-            num_envs, unique_states_dim, const.gait_net.footstep_option_dim
-        )
-        unique_states_iter = torch.split(unique_states, 1, dim=1)
-
-        shared_embedding: torch.Tensor = self.shared_encoder(shared_state)
-
-        unique_embeddings = []
-        for unique_state in unique_states_iter:
-            # remove the extra dimension
-            unique_state = unique_state.squeeze(1)
-            # check if this is a no-op state
-            # note that the one hot encoding is [no_op, leg1, leg2, leg3, leg4]
-            no_op_mask = unique_state[:, 0] == 1
-            # also treat high cost as no-op
-            no_op_mask = no_op_mask | (unique_state[:, -1] >= 2.0)
-
-            unique_embedding = torch.zeros(
-                (num_envs, self.unique_embedding_size), device=obs.device
-            )
-            if (~no_op_mask).any():
-                unique_embedding[~no_op_mask] = self.unique_encoder(
-                    unique_state[~no_op_mask]
-                )
-            if no_op_mask.any():
-                unique_embedding[no_op_mask] = self.no_op_embedding
-            unique_embeddings.append(unique_embedding)
-
-        unique_embeddings = torch.stack(unique_embeddings, dim=1)
-        trunk_input = torch.cat(
-            [
-                shared_embedding.unsqueeze(dim=1).expand(-1, unique_states_dim, -1),
-                unique_embeddings,
-            ],
-            dim=-1,
-        )
-        values = self.trunk(trunk_input).squeeze(-1)  # (num_envs, num_unique_states)
-        # collapse the values across the unique states to a single value
-        # in theory this part should learn how we are using the output of the actor (single action selection)
-        value = self.trunk_combiner_head(values)  # (num_envs, 1)
+        shared_embedding = self.shared_encoder(shared_state)
+        value = self.trunk(shared_embedding)  # (num_envs, 1)
 
         return value
 
