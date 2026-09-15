@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 import torch
 import torch.nn as nn
+from torch.utils.checkpoint import checkpoint
 
 from typing import Sequence
 from rsl_rl.modules import ActorCritic
@@ -49,9 +50,21 @@ class GaitnetActor(nn.Module):
         unique_state_dim: int,
         unique_layer_sizes: Sequence[int],
         trunk_layer_sizes: Sequence[int],
+        checkpoint_chunk_size: int | None = 1024,
+        use_bf16: bool = True,
     ):
+        """
+        Args:
+            checkpoint_chunk_size: When gradients are enabled, split the batch into chunks
+                of this size and checkpoint each, so backward only holds one chunk's
+                activations at a time. Memory would otherwise grow with
+                batch_size * num_options. None disables checkpointing.
+            use_bf16: Run the network under bf16 autocast on CUDA.
+        """
         super().__init__()
         logger.info("GaitnetActor initializing")
+        self.checkpoint_chunk_size = checkpoint_chunk_size
+        self.use_bf16 = use_bf16
 
         self.shared_encoder = make_mlp(
             input_size=shared_state_dim,
@@ -113,33 +126,53 @@ class GaitnetActor(nn.Module):
         unique_states = obs[:, const.gait_net.robot_state_dim :].view(
             num_envs, unique_states_dim, const.gait_net.footstep_option_dim
         )
-        unique_states_iter = torch.split(unique_states, 1, dim=1)
+
+        with torch.autocast(
+            device_type=obs.device.type,
+            dtype=torch.bfloat16,
+            enabled=self.use_bf16 and obs.is_cuda,
+        ):
+            chunk = self.checkpoint_chunk_size
+            if chunk and torch.is_grad_enabled() and num_envs > chunk:
+                outputs = [
+                    checkpoint(self._forward, shared, unique, use_reentrant=False)
+                    for shared, unique in zip(
+                        shared_state.split(chunk), unique_states.split(chunk)
+                    )
+                ]
+                logits = torch.cat([logits for logits, _ in outputs])
+                duration = torch.cat([duration for _, duration in outputs])
+            else:
+                logits, duration = self._forward(shared_state, unique_states)
+
+        return logits.float(), duration.float()
+
+    def _forward(
+        self, shared_state: torch.Tensor, unique_states: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """Forward pass on already split observations.
+
+        Args:
+            shared_state: (num_envs, robot_state_dim)
+            unique_states: (num_envs, num_options, footstep_option_dim)
+
+        Returns:
+            logits and durations, both (num_envs, num_options)
+        """
+        # note that the one hot encoding is [no_op, leg1, leg2, leg3, leg4]
+        no_op_mask = unique_states[:, :, 0] == 1  # (num_envs, num_options)
 
         shared_embedding: torch.Tensor = self.shared_encoder(shared_state)
+        unique_embeddings: torch.Tensor = self.unique_encoder(unique_states)
+        unique_embeddings = torch.where(
+            no_op_mask.unsqueeze(-1),
+            self.no_op_embedding.to(unique_embeddings.dtype),
+            unique_embeddings,
+        )
 
-        unique_embeddings = []
-        for unique_state in unique_states_iter:
-            # remove the extra dimension
-            unique_state = unique_state.squeeze(1)
-            # check if this is a no-op state
-            # note that the one hot encoding is [no_op, leg1, leg2, leg3, leg4]
-            no_op_mask = unique_state[:, 0] == 1
-
-            unique_embedding = torch.zeros(
-                (num_envs, self.unique_embedding_size), device=obs.device
-            )
-            if (~no_op_mask).any():
-                unique_embedding[~no_op_mask] = self.unique_encoder(
-                    unique_state[~no_op_mask]
-                )
-            if no_op_mask.any():
-                unique_embedding[no_op_mask] = self.no_op_embedding
-            unique_embeddings.append(unique_embedding)
-
-        unique_embeddings = torch.stack(unique_embeddings, dim=1)
         trunk_input = torch.cat(
             [
-                shared_embedding.unsqueeze(dim=1).expand(-1, unique_states_dim, -1),
+                shared_embedding.unsqueeze(dim=1).expand(-1, unique_states.shape[1], -1),
                 unique_embeddings,
             ],
             dim=-1,
@@ -148,17 +181,12 @@ class GaitnetActor(nn.Module):
 
         logits = self.value_head(trunk_output).squeeze(-1)  # (num_envs, num_options)
 
-        # only calculate durations for non no-op options
-        duration = torch.zeros((num_envs, unique_states_dim), device=obs.device)
-        no_op_mask = unique_states[:, :, 0] == 1
-        duration[~no_op_mask] = self.duration_head(trunk_output[~no_op_mask]).squeeze(
-            -1
-        )  # (num_envs, num_options)
-
-        # Scale durations to reasonable range
+        # Scale durations to reasonable range, no-op options have zero duration
         min_dur, max_dur = const.gait_net.valid_swing_duration_range
         scale = max_dur - min_dur
-        duration[~no_op_mask] = torch.sigmoid(duration[~no_op_mask]) * scale + min_dur
+        duration = self.duration_head(trunk_output).squeeze(-1).float()
+        duration = torch.sigmoid(duration) * scale + min_dur
+        duration = torch.where(no_op_mask, 0.0, duration)  # (num_envs, num_options)
 
         return logits, duration
 
