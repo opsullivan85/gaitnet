@@ -15,7 +15,7 @@ from gaitnet.gaitnet.env_cfg.events import EventsCfg
 from gaitnet.gaitnet.env_cfg.terminations import TerminationsCfg
 from gaitnet.gaitnet.env_cfg.rewards import RewardsCfg
 from gaitnet.gaitnet.env_cfg.commands import CommandsCfg
-from gaitnet.util import VectorPool
+from gaitnet.util import SharedMemoryVectorPool, VectorPool
 
 logger = get_logger()
 
@@ -82,15 +82,18 @@ def get_env_cfg(num_envs: int, device: str) -> GaitNetEnvCfg:
 
 
 def update_controllers(
-    cfg: GaitNetEnvCfg, num_envs: int
+    cfg: GaitNetEnvCfg, num_envs: int, shared_memory: bool = True
 ) -> None:
     """Update the controllers in the environment configuration.
 
     Args:
         envcfg (GaitNetEnvCfg): The environment configuration.
         controllers (VectorPool[sim2real.Sim2RealInterface]): The controllers to set.
+        shared_memory (bool): Pass controller inputs and outputs through shared memory
+            instead of pickling them over pipes.
     """
-    controllers: VectorPool[Sim2RealInterface] = VectorPool(
+    pool_class = SharedMemoryVectorPool if shared_memory else VectorPool
+    controllers: VectorPool[Sim2RealInterface] = pool_class(
         instances=num_envs,
         cls=SimInterface,
         dt=cfg.sim.dt,  # 125 Hz leg PD control
