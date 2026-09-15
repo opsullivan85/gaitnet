@@ -82,7 +82,7 @@ def get_env_cfg(num_envs: int, device: str) -> GaitNetEnvCfg:
 
 
 def update_controllers(
-    cfg: GaitNetEnvCfg, num_envs: int, shared_memory: bool = True
+    cfg: GaitNetEnvCfg, num_envs: int, shared_memory: bool = False
 ) -> None:
     """Update the controllers in the environment configuration.
 
@@ -90,7 +90,8 @@ def update_controllers(
         envcfg (GaitNetEnvCfg): The environment configuration.
         controllers (VectorPool[sim2real.Sim2RealInterface]): The controllers to set.
         shared_memory (bool): Pass controller inputs and outputs through shared memory
-            instead of pickling them over pipes.
+            instead of pickling them over pipes. Off by default since transport is
+            under 2% of pool call time; MPC compute dominates.
     """
     pool_class = SharedMemoryVectorPool if shared_memory else VectorPool
     controllers: VectorPool[Sim2RealInterface] = pool_class(
