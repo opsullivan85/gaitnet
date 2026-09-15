@@ -28,3 +28,10 @@ ROBOT_CFG.spawn.physics_material = sim_utils.RigidBodyMaterialCfg(
 
 # default of 4 converges the friction cone poorly, showing up as visible foot slip
 ROBOT_CFG.spawn.articulation_props.solver_position_iteration_count = 8
+
+# the base UNITREE_GO1_CFG spawns at the USD's default standing height (0.4 m),
+# well above the MPC's nominal stance height (_bodyHeight = 0.26 in
+# Quadruped.py). Combined with the near-straight reset leg pose, this caused
+# every episode to open with an uncontrolled ~13 cm drop before the MPC could
+# regain height. Spawn at the MPC's target height instead.
+ROBOT_CFG.init_state.pos = (0.0, 0.0, 0.27)

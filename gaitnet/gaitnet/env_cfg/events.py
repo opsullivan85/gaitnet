@@ -4,6 +4,11 @@ from isaaclab.managers import SceneEntityCfg
 from isaaclab.utils import configclass
 
 joint_pos_eps = 0.05
+# centered on 1.2 so the reset pose's foot height (~-0.26 m) matches the MPC's
+# nominal stance height (_bodyHeight = 0.26 in Quadruped.py). A scale near 0.5
+# left legs nearly straight, so every episode opened with the QP commanding
+# near-minimum force and the robot free-falling ~13 cm onto the ground.
+joint_pos_scale = 1.2
 
 @configclass
 class EventsCfg:
@@ -79,7 +84,7 @@ class EventsCfg:
         func=mdp.reset_joints_by_scale,
         mode="reset",
         params={
-            "position_range": (0.5- joint_pos_eps, 0.5 + joint_pos_eps),
+            "position_range": (joint_pos_scale - joint_pos_eps, joint_pos_scale + joint_pos_eps),
             "velocity_range": (0.0, 0.0),
         },
     )
