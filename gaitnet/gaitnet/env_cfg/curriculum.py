@@ -109,5 +109,5 @@ class CurriculumCfg:
     #     },
     # )
 
-    terrain_levels = CurrTerm(func=vmdp.terrain_levels_vel)
-    # terrain_levels = CurrTerm(func=terrain_levels_vel)  # type: ignore
+    # terrain_levels = CurrTerm(func=vmdp.terrain_levels_vel)
+    terrain_levels = CurrTerm(func=terrain_levels_vel)  # type: ignore
