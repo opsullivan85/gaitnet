@@ -135,7 +135,7 @@ def main():
             "use_clipped_value_loss": True,
             # decay rate of future rewards. Closer to 1 = long horizon, closer to 0 = short horizon
             # H=1/(1-gamma); 0.98 corresponds to 2s, 0.99 to 5s
-            "gamma": 0.99,
+            "gamma": 0.995,
             "lam": 0.95,
         },
         "policy": {
