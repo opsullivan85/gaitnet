@@ -39,7 +39,7 @@ import re
 from pathlib import Path
 import gaitnet.constants as const
 from gaitnet.eval.components.fixed_velocity_command import FixedVelocityCommand, FixedVelocityCommandCfg
-from gaitnet.gaitnet.env_cfg.observations_utils import contact_state_indices
+from gaitnet.gaitnet.env_cfg.observations_utils import scheduled_contact
 from gaitnet import GIT_COMMIT, get_logger
 
 logger = get_logger()
@@ -52,7 +52,7 @@ def get_actions(obs: torch.Tensor) -> torch.Tensor:
     actions = torch.stack([no_op] * obs.shape[0], dim=0)  # (num_envs, 2)
 
     # if all legs in contact, pick the non-no-op action with the lowest cost value
-    contact_states = obs[:, contact_state_indices].bool()
+    contact_states = scheduled_contact(obs)
     num_legs_in_contact = contact_states.sum(dim=1)
     full_contact_mask = num_legs_in_contact == const.robot.num_legs
     if not torch.any(full_contact_mask):

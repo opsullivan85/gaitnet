@@ -13,6 +13,7 @@ from isaaclab.envs.utils.io_descriptors import (
     record_shape,
 )
 import torch.nn.functional as F
+import isaaclab.utils.math as math_utils
 from gaitnet.util.vectorpool import VectorPool
 from gaitnet.sim2real.abstractinterface import Sim2RealInterface
 from gaitnet import get_logger
@@ -61,18 +62,102 @@ def foot_position_xy_b(
 
 
 @generic_io_descriptor(
+    units="m",
+    observation_type="RootState",
+    on_inspect=[record_shape, record_dtype],
+)
+def foot_position_z_b(
+    env: ManagerBasedEnv,
+    transform_name: SceneEntityCfg = SceneEntityCfg("foot_transforms"),
+) -> torch.Tensor:
+    """Get foot z positions in the base frame, (N, 4).
+
+    Uses the same FrameTransformer sensor as `foot_position_xy_b`.
+    """
+    return env.scene[transform_name.name].data.target_pos_source[:, :, 2]
+
+
+@generic_io_descriptor(
+    units="m/s",
+    observation_type="BodyState",
+    on_inspect=[record_shape, record_dtype],
+)
+def foot_velocity_b(
+    env: ManagerBasedEnv, asset_cfg: SceneEntityCfg, flatten: bool = False
+) -> torch.Tensor:
+    """Get foot velocities relative to the base, expressed in the base frame.
+
+    This is the quantity leg kinematics measure on hardware (J(q) * qd), so it
+    excludes the base's own motion: a planted foot reads -(v_base + w x r_foot).
+
+    Args:
+        env: The environment instance.
+        asset_cfg: The robot, with body_names set to the feet in the desired order.
+        flatten: Whether to flatten the output to (N, 3 * num_feet) instead of (N, num_feet, 3).
+    """
+    data = env.scene[asset_cfg.name].data
+    foot_pos_w = data.body_link_pos_w[:, asset_cfg.body_ids]
+    foot_vel_w = data.body_link_lin_vel_w[:, asset_cfg.body_ids]
+    base_ang_vel_w = data.root_link_ang_vel_w.unsqueeze(1)
+    foot_offset_w = foot_pos_w - data.root_link_pos_w.unsqueeze(1)
+    relative_vel_w = (
+        foot_vel_w
+        - data.root_link_lin_vel_w.unsqueeze(1)
+        - torch.cross(base_ang_vel_w.expand_as(foot_offset_w), foot_offset_w, dim=-1)
+    )
+    base_quat_w = data.root_link_quat_w.unsqueeze(1).expand(-1, relative_vel_w.shape[1], -1)
+    relative_vel_b = math_utils.quat_apply_inverse(base_quat_w, relative_vel_w)
+    if flatten:
+        relative_vel_b = relative_vel_b.reshape(relative_vel_b.shape[0], -1)
+    return relative_vel_b
+
+
+@generic_io_descriptor(
     observation_type="RootState",
     on_inspect=[record_shape, record_dtype],
 )
 def contact_state_sensors(
     env: ManagerBasedEnv, sensor_cfg: SceneEntityCfg
 ) -> torch.Tensor:
-    """Get the contact state from a sensor."""
-    contact_forces = env.scene[sensor_cfg.name].data.net_forces_w
-    contacts = (
-        contact_forces.norm(dim=2) > env.scene["contact_forces"].cfg.force_threshold
-    )
-    return contacts
+    """Get the measured contact state from a contact sensor, (N, num_bodies) float.
+
+    Args:
+        env: The environment instance.
+        sensor_cfg: The ContactSensor, with body_names set to the feet in the desired order.
+    """
+    sensor = env.scene[sensor_cfg.name]
+    contact_forces = sensor.data.net_forces_w[:, sensor_cfg.body_ids]
+    contacts = contact_forces.norm(dim=-1) > sensor.cfg.force_threshold
+    return contacts.float()
+
+
+@generic_io_descriptor(
+    observation_type="RootState",
+    on_inspect=[record_shape, record_dtype],
+)
+def gait_timing_controller(env: ManagerBasedEnv) -> torch.Tensor:
+    """Get the scheduled gait timing from the controller, (N, 12).
+
+    Feature grouped, legs in FL, FR, RL, RR order:
+    [swing phase (4), remaining swing time (4), time since touchdown (4)].
+    Time since touchdown is clipped to `const.gait_net.max_stance_time_obs`.
+    """
+    controllers: VectorPool[Sim2RealInterface] = env.cfg.robot_controllers  # type: ignore
+
+    # see contact_state_controller
+    if controllers is None:
+        logger.warning(
+            "Controllers are not initialized, returning fake data. Normal 1 time only."
+        )
+        return torch.zeros((env.num_envs, 3 * const.robot.num_legs), device=env.device)
+
+    timing: np.ndarray = controllers.call(
+        Sim2RealInterface.get_gait_timing, mask=None
+    )  # (N, 4, 3), already in FL, FR, RL, RR order
+    timing[:, :, 2] = np.minimum(timing[:, :, 2], const.gait_net.max_stance_time_obs)
+    # (N, 4, 3) -> (N, 3, 4) so the output is grouped by feature
+    timing = np.ascontiguousarray(timing.transpose(0, 2, 1)).reshape(timing.shape[0], -1)
+    return torch.from_numpy(timing).to(env.device)
 
 
 @generic_io_descriptor(
@@ -177,18 +262,47 @@ class ObservationsCfg:
             params={"command_name": "base_velocity"},
         )
 
-        # contact_state_sensor = ObsTerm(
-        #     func=contact_state_sensors,
-        #     params={"sensor_cfg": SceneEntityCfg("contact_forces")},
-        # )
+        # the term order here defines the layout documented in observations_utils
 
-        contact_state_controller = ObsTerm(
-            func=contact_state_controller,
-            params={},
+        # measured contact, to match deployment where contact is estimated rather than scheduled
+        contact_state_sensor = ObsTerm(
+            func=contact_state_sensors,
+            params={
+                "sensor_cfg": SceneEntityCfg(
+                    "contact_forces",
+                    body_names=["FL_foot", "FR_foot", "RL_foot", "RR_foot"],
+                    preserve_order=True,
+                )
+            },
         )
+        # contact_state_controller = ObsTerm(
+        #     func=contact_state_controller,
+        #     params={},
+        # )
 
         projected_gravity = ObsTerm(
             func=mdp.projected_gravity,
+        )
+
+        foot_position_z_b = ObsTerm(
+            func=foot_position_z_b,
+            noise=Unoise(n_min=-0.01, n_max=0.01),  # matches foot_position_xy_b
+        )
+
+        foot_velocity_b = ObsTerm(
+            func=foot_velocity_b,
+            params={
+                "asset_cfg": SceneEntityCfg(
+                    "robot",
+                    body_names=["FL_foot", "FR_foot", "RL_foot", "RR_foot"],
+                    preserve_order=True,
+                ),
+                "flatten": True,
+            },
+        )
+
+        gait_timing_controller = ObsTerm(
+            func=gait_timing_controller,
         )
 
         # scanners are last, in FL, FR, RL, RR order so terrain channel i is footstep option leg i

@@ -11,7 +11,7 @@ if _debug_footstep_cost_map_all or _debug_footstep_cost_map:
     from gaitnet.contactnet.debug import view_footstep_cost_map
 
 from gaitnet.constants import NO_STEP
-from gaitnet.gaitnet.env_cfg.observations_utils import contact_state_indices
+from gaitnet.gaitnet.env_cfg.observations_utils import contactnet_obs_dim, scheduled_contact
 from gaitnet.simulation.cfg.footstep_scanner_constants import idx_to_xy
 from gaitnet.util.math import seeded_uniform_noise
 
@@ -60,7 +60,9 @@ class FootstepCandidateSampler:
             terrain_mask, cost_map, torch.tensor(float("inf"), device=cost_map.device)
         )
 
-        contact_states = obs[:, contact_state_indices].bool()  # (num_envs, 4)
+        # use the controller's schedule rather than measured contact, since a leg
+        # the controller still has in swing can't be given a new footstep
+        contact_states = scheduled_contact(obs)  # (num_envs, 4)
         swing_states = ~contact_states  # (num_envs, 4)
         masked_cost_maps = torch.where(
             swing_states.unsqueeze(-1).unsqueeze(-1),
@@ -233,7 +235,7 @@ class FootstepCandidateSampler:
                           appends a NO_STEP option at the end of the list.
         """
         if not const.experiments.random_footstep_sampling:
-            contactnet_obs = obs[:, :18]
+            contactnet_obs = obs[:, :contactnet_obs_dim]
             with torch.inference_mode():
                 cost_maps = self.cost_map_generator.predict(
                     contactnet_obs

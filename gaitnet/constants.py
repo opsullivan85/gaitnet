@@ -44,8 +44,11 @@ class _GaitNet:
     Note that these are negative of the values you would expect."""
     valid_swing_duration_range: tuple[float, float] = (0.1, 0.3)
     """(min, max) valid swing duration range for footstep options."""
-    robot_state_dim: int = 25
-    """Dimension of the robot state input to GaitNet (shared state)"""
+    robot_state_dim: int = 53
+    """Dimension of the robot state input to GaitNet (shared state).
+    See `gaitnet.gaitnet.env_cfg.observations_utils` for the layout."""
+    max_stance_time_obs: float = 0.5
+    """Time since touchdown (s) is clipped to this in observations, since it is otherwise unbounded."""
     footstep_option_dim: int = 8
     """Dimension of the footstep option input to GaitNet (unique state)"""
 
