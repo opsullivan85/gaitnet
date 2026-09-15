@@ -314,7 +314,7 @@ class GaitnetActorCritic(ActorCritic):
         episode_info: dict[str, Any] | None = None,
         init_noise_std=1.0,
         noise_std_type: str = "scalar",
-        duration_std: float = 0.01,  # Standard deviation for duration noise
+        duration_std: float = 0.05,  # Initial standard deviation for duration noise (learned)
         actor_obs_normalization=False,
         critic_obs_normalization=False,
         **kwargs,
@@ -330,7 +330,7 @@ class GaitnetActorCritic(ActorCritic):
             episode_info (dict[str, Any] | None, optional): Shared dictionary to dump episode data into
             init_noise_std (float, optional): _description_. Defaults to 1.0.
             noise_std_type (str, optional): _description_. Defaults to "scalar".
-            duration_std (float, optional): _description_. Defaults to 0.01.
+            duration_std (float, optional): Initial duration std, then learned. Defaults to 0.05.
         """
         self.actor_obs_normalization = actor_obs_normalization
         self.critic_obs_normalization = critic_obs_normalization
@@ -361,8 +361,11 @@ class GaitnetActorCritic(ActorCritic):
         self.discrete_distribution: Categorical | None = None  # For action selection
         self.duration_distribution: Normal | None = None  # For duration values
 
-        # Duration standard deviation (fixed for now, could be learned)
-        self.duration_std = duration_std
+        # Duration standard deviation, learned. Log-parameterized so it can't
+        # go negative and collapse the distribution during training.
+        self.duration_log_std = nn.Parameter(
+            torch.log(torch.tensor(duration_std, dtype=torch.float32))
+        )
 
         # Cache for storing selected action indices and durations
         self._last_action_indices: torch.Tensor | None = None
@@ -375,6 +378,11 @@ class GaitnetActorCritic(ActorCritic):
 
     def forward(self):
         raise NotImplementedError
+
+    @property
+    def duration_std(self) -> torch.Tensor:
+        """Learned duration standard deviation (0-dim tensor, always positive)."""
+        return self.duration_log_std.exp()
 
     @property
     def action_mean(self):
@@ -422,8 +430,8 @@ class GaitnetActorCritic(ActorCritic):
         # Dummy std for discrete action
         discrete_std = torch.ones(num_envs, 1, device=device)
 
-        # Duration std (constant for all options)
-        duration_std = torch.full((num_envs, 1), self.duration_std, device=device)
+        # Duration std (learned, shared across all options)
+        duration_std = self.duration_std.detach().to(device).expand(num_envs, 1)
 
         return torch.cat([discrete_std, duration_std], dim=-1)
 
@@ -498,7 +506,11 @@ class GaitnetActorCritic(ActorCritic):
 
             else:
                 self.episode_info["leg_option_std"] = 0
-                self.episode_info["logit_cost_correlation"] = 0 
+                self.episode_info["logit_cost_correlation"] = 0
+
+            # Learned duration distribution std (the parameter itself, not the
+            # empirical std of sampled durations logged in act()).
+            self.episode_info["duration_std_param"] = self.duration_std.item()
 
         # Cache duration means for later use
         self._cached_duration_means = duration_means
@@ -518,8 +530,10 @@ class GaitnetActorCritic(ActorCritic):
 
         self.discrete_distribution = Categorical(logits=masked_logits)
 
-        # Create continuous distribution for durations
-        duration_std = torch.full_like(duration_means, self.duration_std)
+        # Create continuous distribution for durations. Keep this as the learned
+        # parameter (not detached) so gradients from the duration log-prob flow
+        # back into duration_log_std, letting the policy widen/narrow it as needed.
+        duration_std = self.duration_std.expand_as(duration_means)
         self.duration_distribution = Normal(duration_means, duration_std)
 
     def act(self, observations, **kwargs):
