@@ -152,11 +152,10 @@ class FSCActionTerm(ActionTerm):
         selected_options = all_options[batch_indices, action_indices]  # (num_envs, 4)
 
         # Replace the cost (column 3) with the duration from the policy.
-        # Durations are sampled from an unbounded Normal, so clip to the valid range here.
-        # The policy's log-prob is still computed on the unclipped sample it stored.
+        # Durations are intentionally not clipped to the valid range: clipping made
+        # overlong swings free, so the policy pushed the mean duration to the cap.
         selected_actions = selected_options.clone()
-        min_dur, max_dur = const.gait_net.valid_swing_duration_range
-        selected_actions[:, 3] = durations.clamp(min_dur, max_dur)
+        selected_actions[:, 3] = durations
 
         return selected_actions  # (num_envs, 4) - (leg, x, y, duration)
 
