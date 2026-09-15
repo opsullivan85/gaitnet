@@ -148,3 +148,25 @@ class SimInterface(Sim2RealInterface):
     # override
     def get_swing_durations(self) -> NDArray[Shape["4, 1"], Float32]:
         return self.robot_runner.cMPC.gait.swing_durations
+
+    # override
+    def get_gait_timing(self) -> NDArray[Shape["4, 3"], Float32]:
+        gait = self.robot_runner.cMPC.gait
+        # use the gait's own contact definition so the swing/stance split here
+        # always agrees with the contact schedule the MPC is running
+        in_contact = gait.getContactPhase().flatten().astype(bool)
+        start = gait.swing_start_times.flatten()
+        duration = gait.swing_durations.flatten()
+        touchdown = start + duration
+
+        elapsed_swing = gait.time - start
+        swing_phase = np.divide(
+            elapsed_swing, duration, out=np.zeros_like(duration), where=duration > 0
+        )
+        swing_phase = np.where(in_contact, 0.0, np.clip(swing_phase, 0.0, 1.0))
+        swing_remaining = np.where(in_contact, 0.0, np.maximum(touchdown - gait.time, 0.0))
+        stance_time = np.where(in_contact, np.maximum(gait.time - touchdown, 0.0), 0.0)
+
+        return np.stack([swing_phase, swing_remaining, stance_time], axis=1).astype(
+            np.float32
+        )

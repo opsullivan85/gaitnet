@@ -101,9 +101,27 @@ class Sim2RealInterface(ABC):
         """Get the swing durations of each leg.
 
         Returns:
-            np.ndarray: (4, 1) float32 array indicating swing duration of each leg
+            np.ndarray: (4, 1) float32 array indicating the duration of each leg's
+                most recent swing. This is not cleared on touchdown.
                 index 0: leg index (0-3) in FL, FR, RL, RR order
                 value in seconds
+        """
+        pass
+
+    @abstractmethod
+    def get_gait_timing(self) -> NDArray[Shape["4, 3"], Float32]:
+        """Get the scheduled gait timing of each leg.
+
+        This is the controller's plan, not a measurement: a foot that strikes the
+        ground early is still reported as swinging until its scheduled touchdown.
+
+        Returns:
+            np.ndarray: (4, 3) float32 array
+                index 0: leg index (0-3) in FL, FR, RL, RR order
+                index 1:
+                    0: swing phase in [0, 1], 0 while in stance
+                    1: remaining swing time (s), 0 while in stance
+                    2: time since scheduled touchdown (s), 0 while in swing
         """
         pass
 
