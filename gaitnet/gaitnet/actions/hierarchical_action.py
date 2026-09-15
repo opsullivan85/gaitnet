@@ -2,6 +2,7 @@
 """
 
 from dataclasses import MISSING
+from typing import Sequence
 
 import torch
 from isaaclab.envs import ManagerBasedEnv
@@ -43,6 +44,15 @@ class HierarchicalActionTerm(ActionTerm):
         if self._step_count % self._skip == 0:
             self.inner.apply_actions()
         self._step_count += 1
+
+    def reset(self, env_ids: Sequence[int] | None = None):
+        """Resets the inner action term.
+
+        Note:
+            ManagerTermBase defines a no-op reset, which would otherwise shadow
+            the inner term's reset and prevent __getattr__ from ever deferring to it.
+        """
+        self.inner.reset(env_ids)
 
     # the following need to be explicitly defined to avoid ABC errors
 

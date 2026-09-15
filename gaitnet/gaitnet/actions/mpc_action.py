@@ -6,6 +6,7 @@ from isaaclab.assets import Articulation
 from isaaclab.envs import ManagerBasedEnv, ManagerBasedRLEnv
 from isaaclab.managers import ActionTerm, ActionTermCfg
 from isaaclab.utils import configclass
+import numpy as np
 import torch
 
 from gaitnet import sim2real
@@ -90,16 +91,24 @@ class MPCActionTerm(ActionTerm):
         Args:
             env_ids: The environment IDs to reset.
         """
-        # convert env_ids to numpy arrray if not none
-        if isinstance(env_ids, torch.Tensor):
-            env_ids = env_ids.cpu().numpy()  # type: ignore
+        # convert env_ids to a boolean mask of length num_envs, since that's
+        # what VectorPool.call expects
+        if env_ids is None:
+            reset_slice = slice(None)
+            mask = np.full((self.num_envs,), True, dtype=bool)
+        else:
+            if isinstance(env_ids, torch.Tensor):
+                env_ids = env_ids.cpu().numpy()  # type: ignore
+            reset_slice = env_ids
+            mask = np.zeros((self.num_envs,), dtype=bool)
+            mask[env_ids] = True
 
-        self._raw_actions[env_ids] = 0.0
-        self._processed_actions[env_ids] = 0.0
+        self._raw_actions[reset_slice] = 0.0
+        self._processed_actions[reset_slice] = 0.0
         robot_controllers: VectorPool[sim2real.Sim2RealInterface] = self.env_cfg.robot_controllers  # type: ignore
         robot_controllers.call(
             function=sim2real.Sim2RealInterface.reset,
-            mask=env_ids,  # type: ignore
+            mask=mask,
         )
 
 
