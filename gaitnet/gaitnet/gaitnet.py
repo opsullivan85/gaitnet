@@ -337,6 +337,8 @@ class GaitnetActorCritic(ActorCritic):
         self._last_action_indices: torch.Tensor | None = None
         self._last_sampled_durations: torch.Tensor | None = None
         self._cached_duration_means: torch.Tensor | None = None
+        # (num_envs, num_options) True where the option is a real footstep, not a no-op
+        self._op_mask: torch.Tensor | None = None
 
     def reset(self, dones=None):
         """Reset recurrent states (no-op for non-recurrent policy)."""
@@ -403,22 +405,18 @@ class GaitnetActorCritic(ActorCritic):
 
     @property
     def entropy(self):
-        """Return the entropy of the joint distribution.
+        """Return the entropy used for the PPO entropy bonus.
 
-        For independent discrete and continuous components, total entropy is the sum.
+        Only the discrete action selection is included. The duration std is learned,
+        and a Normal's entropy grows with log(std) at a constant rate, so including it
+        would steadily push the duration noise up regardless of performance.
         """
         if self.discrete_distribution is None or self.duration_distribution is None:
             raise RuntimeError(
                 "Distribution not initialized. Call update_distribution first."
             )
 
-        discrete_entropy = self.discrete_distribution.entropy()  # (num_envs,)
-        # For duration, sum entropy across all options (since we condition on action selection)
-        duration_entropy = self.duration_distribution.entropy().mean(
-            dim=-1
-        )  # (num_envs,)
-
-        return discrete_entropy + duration_entropy
+        return self.discrete_distribution.entropy()  # (num_envs,)
 
     def update_distribution(self, observations):
         """Update the action distribution based on observations.
@@ -493,6 +491,7 @@ class GaitnetActorCritic(ActorCritic):
         masked_logits = logits.clone()
         masked_logits[no_op_mask] = float("-inf")
         masked_logits[:, -1] = logits[:, -1]  # always allow the last no-op option
+        self._op_mask = ~no_op_mask
 
         self.discrete_distribution = Categorical(logits=masked_logits)
 
@@ -595,6 +594,9 @@ class GaitnetActorCritic(ActorCritic):
         duration_log_prob = self.duration_distribution.log_prob(
             sampled_durations.unsqueeze(-1)
         )[batch_indices, action_indices]
+        # a no-op's duration is never used, so it isn't part of the action
+        is_op = self._op_mask[batch_indices, action_indices]  # type: ignore
+        duration_log_prob = torch.where(is_op, duration_log_prob, 0.0)
 
         # Joint log probability is the sum (since they're independent given the action)
         joint_log_prob = discrete_log_prob + duration_log_prob
