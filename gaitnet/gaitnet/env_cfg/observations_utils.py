@@ -47,6 +47,10 @@ robot_state_layout: dict[str, tuple[int, int]] = {
 Per-leg values are in FL, FR, RL, RR order. The footstep scanner terms follow.
 GaitNetObservationManager checks this against the configured terms."""
 
+footstep_scanner_terms = ["FL_foot_scanner", "FR_foot_scanner", "RL_foot_scanner", "RR_foot_scanner"]
+"""Policy observation terms after the robot state. Their order is the leg order of the
+terrain channels, and so of the footstep options: FL, FR, RL, RR."""
+
 contactnet_obs_dim = robot_state_layout["control"][1]
 contact_state_indices = np.arange(*robot_state_layout["contact_state_sensor"])
 """Measured contact state. For whether the controller considers a leg in stance, use `scheduled_contact`."""

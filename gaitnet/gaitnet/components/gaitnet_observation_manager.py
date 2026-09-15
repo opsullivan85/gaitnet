@@ -1,5 +1,6 @@
 """Observation term to generate footstep options as an isaaclab observation."""
 
+import numpy as np
 import torch
 import torch.nn.functional as F
 from isaaclab.managers import (
@@ -7,6 +8,7 @@ from isaaclab.managers import (
 )
 
 import gaitnet.constants as const
+import gaitnet.gaitnet.env_cfg.observations_utils as obs_utils
 from gaitnet.gaitnet.actions.mpc_action import ManagerBasedEnv
 from gaitnet.gaitnet.components.footstep_candidate_sampler import FootstepCandidateSampler
 from gaitnet import get_logger
@@ -38,7 +40,36 @@ class GaitNetObservationManager(ObservationManager):
         Each option is represented as (leg_index, x_offset, y_offset, cost)."""
         self._footstep_actions: torch.Tensor
         self.most_recent_terrain_obs: torch.Tensor
+        self._check_robot_state_layout()
         self._overwrite_obs_dim()
+
+    def _check_robot_state_layout(self) -> None:
+        """Check the configured policy terms match the layout the rest of the code indexes into."""
+        names = list(self._group_obs_term_names["policy"])
+        dims = [int(np.prod(dim)) for dim in self._group_obs_term_dim["policy"]]
+        starts = np.cumsum([0] + dims[:-1]).tolist()
+        actual = [(name, (start, start + dim)) for name, start, dim in zip(names, starts, dims)]
+
+        expected = list(obs_utils.robot_state_layout.items())
+        if actual[: len(expected)] != expected:
+            raise ValueError(
+                "Policy observation terms don't match observations_utils.robot_state_layout."
+                f"\n\texpected: {expected}\n\tactual:   {actual[: len(expected)]}"
+            )
+        robot_state_dim = expected[-1][1][1]
+        if robot_state_dim != const.gait_net.robot_state_dim:
+            raise ValueError(
+                f"robot_state_layout is {robot_state_dim} dims, but "
+                f"const.gait_net.robot_state_dim is {const.gait_net.robot_state_dim}."
+            )
+        remaining = actual[len(expected) :]
+        if (
+            [name for name, _ in remaining] != obs_utils.footstep_scanner_terms
+            or sum(end - start for _, (start, end) in remaining) != const.footstep_scanner.total_robot_features
+        ):
+            raise ValueError(
+                f"Only {obs_utils.footstep_scanner_terms}, in that order, may follow the robot state, got {remaining}"
+            )
 
     @property
     def footstep_actions(self) -> torch.Tensor:
