@@ -33,7 +33,7 @@ contact_net = _ContactNet()
 
 @dataclass(frozen=True)
 class _GaitNet:
-    num_footstep_options: int = 16
+    num_footstep_options: int = 64
     """Number of footstep options to provide per leg"""
     cspace_dialation: int = 2
     """Number of times to apply max-pooling to the height scan to simulate c-space dialation"""
