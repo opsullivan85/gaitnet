@@ -9,7 +9,7 @@ from isaaclab.utils import configclass
 import numpy as np
 import torch
 
-from gaitnet import sim2real
+from gaitnet.sim2real.siminterface import Sim2RealInterface, SimInterface
 from gaitnet.util import VectorPool
 from gaitnet.simulation.util import controls_to_joint_efforts
 from gaitnet import get_logger
@@ -105,9 +105,9 @@ class MPCActionTerm(ActionTerm):
 
         self._raw_actions[reset_slice] = 0.0
         self._processed_actions[reset_slice] = 0.0
-        robot_controllers: VectorPool[sim2real.Sim2RealInterface] = self.env_cfg.robot_controllers  # type: ignore
+        robot_controllers: VectorPool[Sim2RealInterface] = self.env_cfg.robot_controllers  # type: ignore
         robot_controllers.call(
-            function=sim2real.Sim2RealInterface.reset,
+            function=Sim2RealInterface.reset,
             mask=mask,
         )
 
