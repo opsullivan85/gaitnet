@@ -66,7 +66,7 @@ class Sim2RealInterface(ABC):
 
         Args:
             leg (int): Index of the leg (0-3)
-                in FR, FL, RR, RL order
+                in FL, FR, RL, RR order
             location_hip (NDArray[Shape["2"], Float32]): Desired foot position in the respective hip frame (x, y)
                 This position is relative to the hip of the specified leg.
                 z will be projected down to zero.
@@ -80,7 +80,7 @@ class Sim2RealInterface(ABC):
 
         Returns:
             np.ndarray: (4,) boolean array indicating contact state of each foot
-                index 0: leg index (0-3) in FR, FL, RR, RL order
+                index 0: leg index (0-3) in FL, FR, RL, RR order
                 True if in contact, False otherwise
         """
         pass
@@ -91,7 +91,7 @@ class Sim2RealInterface(ABC):
 
         Returns:
             np.ndarray: (4,) float32 array indicating swing phase of each leg
-                index 0: leg index (0-3) in FR, FL, RR, RL order
+                index 0: leg index (0-3) in FL, FR, RL, RR order
                 value in [0, 1], where 0 is the start of swing and 1 is the end of swing
         """
         pass
@@ -102,7 +102,7 @@ class Sim2RealInterface(ABC):
 
         Returns:
             np.ndarray: (4, 1) float32 array indicating swing duration of each leg
-                index 0: leg index (0-3) in FR, FL, RR, RL order
+                index 0: leg index (0-3) in FL, FR, RL, RR order
                 value in seconds
         """
         pass

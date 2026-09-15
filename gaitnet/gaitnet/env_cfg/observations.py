@@ -93,9 +93,7 @@ def contact_state_controller(env: ManagerBasedEnv) -> torch.Tensor:
 
     contacts: np.ndarray = controllers.call(
         Sim2RealInterface.get_contact_state, mask=None
-    )
-    # FR, FL, RR, RL to FL, FR, RL, RR
-    contacts = contacts[:, [1, 0, 3, 2]]
+    )  # already in FL, FR, RL, RR order
     # logger.info(f"contact: {contacts[0]}")
     contacts_gpu = torch.from_numpy(contacts).to(env.device)
     return contacts_gpu
@@ -193,26 +191,25 @@ class ObservationsCfg:
             func=mdp.projected_gravity,
         )
 
-        FR_foot_scanner = ObsTerm(
-            func=cspace_height_scan,
-            params={"sensor_cfg": SceneEntityCfg("FR_foot_scanner")},
-        )
-
+        # scanners are last, in FL, FR, RL, RR order so terrain channel i is footstep option leg i
         FL_foot_scanner = ObsTerm(
             func=cspace_height_scan,
             params={"sensor_cfg": SceneEntityCfg("FL_foot_scanner")},
         )
 
-        # Based on everything I understood, these next two should be the other
-        # order, but looking at the debug graphs this is correct.
-        RR_foot_scanner = ObsTerm(
+        FR_foot_scanner = ObsTerm(
             func=cspace_height_scan,
-            params={"sensor_cfg": SceneEntityCfg("RR_foot_scanner")},
+            params={"sensor_cfg": SceneEntityCfg("FR_foot_scanner")},
         )
 
         RL_foot_scanner = ObsTerm(
             func=cspace_height_scan,
             params={"sensor_cfg": SceneEntityCfg("RL_foot_scanner")},
+        )
+
+        RR_foot_scanner = ObsTerm(
+            func=cspace_height_scan,
+            params={"sensor_cfg": SceneEntityCfg("RR_foot_scanner")},
         )
 
 

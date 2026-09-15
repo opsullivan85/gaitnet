@@ -87,7 +87,7 @@ def get_step_locations_hip() -> NDArray[Shape["4, N, M ,2"], Float32]:
     Returns:
         np.ndarray: Array of footstep locations relative to the hip.
             (4, N, M, 2) where n and m are the number of footstep positions.
-            in FR, FL, RR, RL order.
+            in FL, FR, RL, RR order.
     """
     N, M = fs._depricated_grid_size
     leg = np.empty((N, M, 2), dtype=np.float32)
@@ -152,7 +152,7 @@ def check_dones(env: ManagerBasedEnv, control: np.ndarray) -> tuple[NDArray[Shap
     Returns:
         np.ndarray: Array of booleans indicating which footstep positions are done.
             (4*N*M) where n and m are the number of footstep positions.
-            in FR, FL, RR, RL order.
+            in FL, FR, RL, RR order.
         np.ndarray: State of the done robots
     """
     controllers: VectorPool[SimInterface] = env.cfg.controllers  # type: ignore

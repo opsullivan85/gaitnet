@@ -238,11 +238,10 @@ class FootstepCandidateSampler:
                 cost_maps = self.cost_map_generator.predict(
                     contactnet_obs
                 )  # (num_envs, 4, H, W)
-            # switch from (FL, FR, RL, RR) to (FR, FL, RR, RL)
-            cost_maps = cost_maps[:, [1, 0, 3, 2], :, :]
+            # ContactNet cost maps are in FL, FR, RL, RR order, same as the footstep options
             if _debug_footstep_cost_map_all:
                 view_footstep_cost_map(
-                    cost_map=cost_maps[0][[1, 0, 3, 2]].cpu().numpy(),
+                    cost_map=cost_maps[0].cpu().numpy(),
                     title="Default Footstep Cost Map",
                     save_figure=True,
                     show_ticks=False,
@@ -259,7 +258,7 @@ class FootstepCandidateSampler:
             )  # (num_envs, 4, H, W)
             if _debug_footstep_cost_map_all:
                 view_footstep_cost_map(
-                    cost_map=cost_maps[0][[1, 0, 3, 2]].cpu().numpy(),
+                    cost_map=cost_maps[0].cpu().numpy(),
                     title="Scaled Footstep Cost Map",
                     save_figure=True,
                     show_ticks=False,
@@ -274,7 +273,7 @@ class FootstepCandidateSampler:
                 cost_maps += noise
                 if _debug_footstep_cost_map_all:
                     view_footstep_cost_map(
-                        cost_map=cost_maps[0][[1, 0, 3, 2]].cpu().numpy(),
+                        cost_map=cost_maps[0].cpu().numpy(),
                         title="Noisy Footstep Cost Map",
                         save_figure=True,
                         show_ticks=False,
@@ -289,7 +288,7 @@ class FootstepCandidateSampler:
         cost_maps = self.filter_cost_map(cost_maps, obs)  # (num_envs, 4, H, W)
         if _debug_footstep_cost_map_all:
             view_footstep_cost_map(
-                cost_maps[0][[1, 0, 3, 2]].cpu().numpy(),
+                cost_maps[0].cpu().numpy(),
                 title="Masked Footstep Cost Map",
                 save_figure=True,
                 # show_ticks=False,
@@ -310,7 +309,7 @@ class FootstepCandidateSampler:
                 cost_maps, options
             )
             view_footstep_cost_map(
-                applied_map[0][[1, 0, 3, 2]].cpu().numpy(),
+                applied_map[0].cpu().numpy(),
                 title="Applied Footstep Cost Map",
                 save_figure=True,
                 # show_ticks=False,
