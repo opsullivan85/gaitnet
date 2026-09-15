@@ -87,11 +87,20 @@ def interface_to_isaac_torques(torques_interface: np.ndarray) -> np.ndarray:
 def controls_to_joint_efforts(
     controls: np.ndarray, controllers: VectorPool, scene: InteractiveScene, asset_name: str = "robot"
 ) -> torch.Tensor:
-    joint_pos = scene[asset_name].data.joint_pos.cpu().numpy()
-    joint_vel = scene[asset_name].data.joint_vel.cpu().numpy()
-    joint_states = isaac_joints_to_interface(joint_pos, joint_vel)
+    asset_data = scene[asset_name].data
+    n_joint_pos = asset_data.joint_pos.shape[-1]
+    n_joint_vel = asset_data.joint_vel.shape[-1]
 
-    body_state = scene[asset_name].data.root_state_w.cpu().numpy()
+    # concatenate on-GPU and do a single transfer instead of three, since each
+    # separate .cpu() call forces its own CUDA sync
+    combined = torch.cat(
+        [asset_data.joint_pos, asset_data.joint_vel, asset_data.root_state_w], dim=-1
+    ).cpu().numpy()
+    joint_pos = combined[:, :n_joint_pos]
+    joint_vel = combined[:, n_joint_pos : n_joint_pos + n_joint_vel]
+    body_state = combined[:, n_joint_pos + n_joint_vel :]
+
+    joint_states = isaac_joints_to_interface(joint_pos, joint_vel)
     body_state = isaac_body_to_interface(body_state)
 
     torques_interface = controllers.call(
