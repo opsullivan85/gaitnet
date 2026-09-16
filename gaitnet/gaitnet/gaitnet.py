@@ -42,6 +42,56 @@ def make_mlp(
     return nn.Sequential(*layers)
 
 
+
+def masked_option_logits(
+    logits: torch.Tensor, observations: torch.Tensor
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Mask invalid footstep options and put each leg's candidates on a per-step scale.
+
+    The candidates are a Monte-Carlo sample of each leg's continuous foothold
+    surface, so the raw aggregate ``sum_i exp(f_i)`` grows with the number of
+    samples drawn, while the no-op is a single atom. Comparing the two directly
+    makes the probability of stepping depend on ``num_footstep_options``.
+    Subtracting ``log(N_valid)`` per leg turns that sum into a mean, so the
+    policy weighs the *average quality* of a leg's available footholds against
+    the value of waiting, independent of how many candidates were sampled.
+
+    Args:
+        logits: Raw per-option logits (num_envs, num_options), leg-major with the
+            no-op option last.
+        observations: Policy observations (num_envs, obs_dim), used to tell which
+            options are real footsteps.
+
+    Returns:
+        masked_logits: (num_envs, num_options), invalid options set to -inf.
+        op_mask: (num_envs, num_options), True where the option is a real footstep.
+    """
+    num_envs, num_options = logits.shape
+    candidates = observations[:, const.gait_net.robot_state_dim :].view(
+        num_envs, num_options, const.gait_net.footstep_option_dim
+    )
+    # the one hot encoding is [no_op, leg1, leg2, leg3, leg4]; options filtered out
+    # by the sampler carry the no-op encoding, as does the trailing no-op itself
+    no_op_mask = candidates[:, :, 0] == 1
+    op_mask = ~no_op_mask
+
+    # per-leg normalization over the leg-major candidate block (no-op is last)
+    step_logits = logits[:, :-1].reshape(num_envs, const.robot.num_legs, -1)
+    step_valid = op_mask[:, :-1].reshape(num_envs, const.robot.num_legs, -1)
+    # legs with no valid candidate are fully masked below, so the count is a
+    # placeholder there and only needs to keep the log finite
+    valid_counts = step_valid.sum(dim=-1, keepdim=True).clamp(min=1)
+    step_logits = step_logits - torch.log(valid_counts.float())
+
+    masked_logits = torch.cat(
+        [step_logits.reshape(num_envs, -1), logits[:, -1:]], dim=-1
+    )
+    masked_logits = masked_logits.masked_fill(no_op_mask, float("-inf"))
+    # the no-op is an atom, not a sampled option: never normalized, always available
+    masked_logits[:, -1] = logits[:, -1]
+    return masked_logits, op_mask
+
+
 class GaitnetActor(nn.Module):
     def __init__(
         self,
@@ -207,8 +257,12 @@ class GaitnetActor(nn.Module):
         # Get logits and durations from actor
         logits, duration_means = actor(observations)
 
+        # Same masking and per-leg normalization as training, so the deterministic
+        # policy can't select a filtered-out option and weighs legs the same way.
+        masked_logits, _ = masked_option_logits(logits, observations)
+
         # Select action with highest logit (deterministic)
-        action_index = torch.argmax(logits, dim=-1)  # (num_envs,)
+        action_index = torch.argmax(masked_logits, dim=-1)  # (num_envs,)
 
         # Use mean durations for the selected action (deterministic)
         batch_size = action_index.shape[0]
@@ -479,21 +533,22 @@ class GaitnetActorCritic(ActorCritic):
         # Cache duration means for later use
         self._cached_duration_means = duration_means
 
-        # remove all but the last no-op so it doesn't affect probabilities
-        num_options = logits.shape[1]
-        # Reshape to get per-option state
-        action_candidates = observations[:, const.gait_net.robot_state_dim :].view(
-            observations.shape[0], num_options, const.gait_net.footstep_option_dim
-        )
-        # Mask: True for valid actions, False for no-ops or high cost
-        no_op_mask = action_candidates[:, :, 0] == 1
-        # Apply mask to logits (set invalid actions to -inf so they get 0 probability)
-        masked_logits = logits.clone()
-        masked_logits[no_op_mask] = float("-inf")
-        masked_logits[:, -1] = logits[:, -1]  # always allow the last no-op option
-        self._op_mask = ~no_op_mask
+        # mask out options the sampler filtered, and scale each leg's candidates
+        # by its valid count so stepping doesn't inflate with the option count
+        masked_logits, op_mask = masked_option_logits(logits, observations)
+        self._op_mask = op_mask
 
         self.discrete_distribution = Categorical(logits=masked_logits)
+
+        if self.episode_info is not None:
+            # probability of stepping rather than holding. With the per-leg
+            # normalization this is comparable across option counts.
+            self.episode_info["step_prob"] = (
+                (1.0 - self.discrete_distribution.probs[:, -1]).mean().item()
+            )
+            self.episode_info["valid_options"] = (
+                op_mask[:, :-1].sum(dim=-1).float().mean().item()
+            )
 
         # Create continuous distribution for durations. Keep this as the learned
         # parameter (not detached) so gradients from the duration log-prob flow
