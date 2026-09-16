@@ -51,14 +51,12 @@ class GaitNetEnvCfg(ManagerBasedRLEnvCfg):
     def __post_init__(self):
         """Post initialization."""
         # general settings
-        self.decimation = 5  # env decimation -> 25 Hz footstep planning
+        self.decimation = 10  # env decimation -> 25 Hz footstep planning
         self.render_interval = (
             self.decimation / 2
         )  # render faster than footstep planning rate
         # simulation settings
-        # 125 Hz leg control keeps IPC/CUDA-sync overhead in apply_actions in
-        # check while staying well above the 31 Hz MPC rate below
-        self.sim.dt = 0.008  # simulation timestep -> 125 Hz physics
+        self.sim.dt = 0.004  # simulation timestep -> 250 Hz physics
         self.sim.physics_material = self.scene.terrain.physics_material
 
         self.episode_length_s = 20
@@ -101,8 +99,8 @@ def update_controllers(
     controllers: VectorPool[Sim2RealInterface] = pool_class(
         instances=num_envs,
         cls=SimInterface,
-        dt=cfg.sim.dt,  # 125 Hz leg PD control
-        iterations_between_mpc=4,  # 31 Hz MPC
+        dt=cfg.sim.dt,  # 250 Hz leg PD control
+        iterations_between_mpc=5,  # 50 Hz MPC
         debug_logging=False,
     )
     cfg.robot_controllers = controllers  # type: ignore
