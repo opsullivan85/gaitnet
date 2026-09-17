@@ -31,7 +31,6 @@ from gaitnet.gaitnet.util import get_checkpoint_path
 from isaaclab.terrains import TerrainGeneratorCfg
 from gaitnet.gaitnet.components.gaitnet_env import GaitNetEnv, GaitNetObservationManager
 from gaitnet.gaitnet.env_cfg.gaitnet_env_cfg import get_env, get_env_cfg, update_controllers
-from gaitnet.gaitnet.components.footstep_candidate_sampler import FootstepCandidateSampler
 from gaitnet.util import log_exceptions, timer
 from gaitnet.gaitnet import gaitnet
 import re
@@ -42,9 +41,7 @@ from gaitnet.eval.components.fixed_velocity_command import (
     FixedVelocityCommandCfg,
 )
 from gaitnet import GIT_COMMIT, get_logger
-from gaitnet.util.pga import generate_footstep_action
-from gaitnet.simulation.cfg.footstep_scanner_constants import xy_to_idx, idx_to_xy
-from gaitnet.constants import NO_STEP
+from gaitnet.util.dense_sampling import dense_footstep_actions
 
 logger = get_logger()
 
@@ -56,6 +53,11 @@ def load_model(checkpoint_path: Path, device: torch.device) -> gaitnet.GaitnetAc
         unique_state_dim=const.gait_net.footstep_option_dim,
         unique_layer_sizes=[64, 64],
         trunk_layer_sizes=[128, 128, 128],
+        # training defaults, both off for evaluation: dense sampling compares
+        # thousands of nearby options, so bf16's ~3 significant digits is enough
+        # to perturb the argmax, and checkpointing only helps when backpropagating
+        checkpoint_chunk_size=None,
+        use_bf16=False,
     )
     agent = model
     checkpoint = torch.load(checkpoint_path, map_location=device)
@@ -109,97 +111,27 @@ def main():
     log_name = f"gaitnet_eval_d{args_cli.difficulty}_v{args_cli.velocity}_commit{GIT_COMMIT}.csv"
     evaluator = Evaluator(env, observations, trials=args_cli.trials, name=log_name)
 
-    def nmodel(obs: torch.Tensor):
-        out = model(obs)
-        out = (-out[0], out[1])  # negate log probs to get logits
-        return out
-
-    # with torch.inference_mode():
-    while not evaluator.done:
-        # with timer.Timer(logger, msg="Evaluation Loop"):
-        # Due to a long series of unfortunate design choices, we have to completley hack together the
-        # custom footstep action generation here. Normally, a set of candidates is generated in the 
-        # observation manager, but we need to generate them here to use PGA, so we inject them back
-        # into the observation manager after generating them. This is why the env.step() call below
-        # looks so stupid
-        best_actions = torch.full(
-            (args_cli.num_envs, 4), float("nan"), device=device
-        )
-        best_logits = torch.full(
-            (args_cli.num_envs, ), float("-inf"), device=device
-        )
-        footstep_option_manager: "GaitNetObservationManager" = env.observation_manager
-        base_obs = obs[:, :const.gait_net.robot_state_dim]
-        # another unfortunate design choice, the observation manager deletes the terrain data, so we need to add
-        # it back in here. In my defense, these decisions were made before these libaries supported dictionary observations,
-        # so I just had one big observation tensor to work with.
-        terrain_obs = torch.cat([base_obs, footstep_option_manager.most_recent_terrain_obs], dim=1)
-        for leg in range(const.robot.num_legs):
-            leg_terrain_mask = FootstepCandidateSampler.filter_cost_map(
-                cost_map=None,
-                obs=terrain_obs,
+    with torch.inference_mode():
+        while not evaluator.done:
+            # with timer.Timer(logger, msg="Evaluation Loop"):
+            footstep_option_manager: "GaitNetObservationManager" = env.observation_manager
+            # the observation manager replaces the terrain scan with the footstep
+            # options it sampled, so rebuild the raw observation dense sampling needs
+            base_obs = obs[:, : const.gait_net.robot_state_dim]
+            terrain_obs = torch.cat(
+                [base_obs, footstep_option_manager.most_recent_terrain_obs], dim=1
             )
-            # prior method uses 0=valid, inf=invalid, so change this to a bool mask
-            leg_terrain_mask = leg_terrain_mask[:, leg] != float("inf")
 
-            leg_action, leg_logit = generate_footstep_action(
-                state=base_obs,
-                terrain_mask=leg_terrain_mask,
-                leg=leg,
-                gaitnet=model,
-                pos_to_idx=xy_to_idx,
-                idx_to_pos=idx_to_xy,
-            )
-            # since we pick the single best action across all legs, we need to compare logits here
-            better_mask = leg_logit.squeeze(-1) > best_logits
-            best_logits = torch.where(better_mask, leg_logit.squeeze(-1), best_logits)
-            best_actions = torch.where(
-                better_mask.unsqueeze(-1),
-                leg_action,
-                best_actions,
-            )
-        
-        # Evaluate no-op option and compare against best leg action
-        # No-op one-hot is [1,0,0,0,0] (index 0), with x=0, y=0, cost=0
-        no_op_one_hot = torch.zeros((args_cli.num_envs, 5), device=device)
-        no_op_one_hot[:, 0] = 1  # no-op is index 0
-        no_op_obs = torch.cat(
-            [
-                base_obs,
-                no_op_one_hot,
-                torch.zeros((args_cli.num_envs, 1), device=device),  # x
-                torch.zeros((args_cli.num_envs, 1), device=device),  # y
-                torch.zeros((args_cli.num_envs, 1), device=device),  # cost
-            ],
-            dim=-1,
-        )
-        no_op_value, _ = model(no_op_obs)
-        no_op_logit = no_op_value.squeeze(-1)
-        
-        # Check if no-op is better than best leg action
-        no_op_better = no_op_logit > best_logits
-        best_logits = torch.where(no_op_better, no_op_logit, best_logits)
-        # No-op action: leg=NO_STEP (-1), x=0, y=0, duration=0
-        no_op_action = torch.tensor([NO_STEP, 0.0, 0.0, 0.0], device=device).expand(args_cli.num_envs, -1)
-        best_actions = torch.where(
-            no_op_better.unsqueeze(-1),
-            no_op_action,
-            best_actions,
-        )
-        # print(best_actions[0])
-        
-        # inject the best actions into the observation manager
-        footstep_option_manager.footstep_options = best_actions.unsqueeze(1)  # (num_envs, 1, 4)
+            # score every cell of every leg rather than the sampler's random subset
+            options, actions = dense_footstep_actions(model, terrain_obs)
+            # the action term resolves the chosen index against the manager's option
+            # set, so it has to see the dense set, not the one the sampler generated
+            footstep_option_manager.footstep_options = options
 
-        # this looks dumb because we manaully inject the actual actions into the observation manager
-        # then just pass their index (all zeros) and duration here
-        action_indices = torch.zeros((args_cli.num_envs,), device=device)
-        action_durations = best_actions[:, 3]
-        env_step_info = env.step(torch.stack((action_indices, action_durations), dim=-1))
-
-        observations, rew, terminated, truncated, info = env_step_info
-        obs = observations["policy"]  # type: ignore
-        evaluator.process(env_step_info)
+            env_step_info = env.step(actions)
+            observations, rew, terminated, truncated, info = env_step_info
+            obs = observations["policy"]  # type: ignore
+            evaluator.process(env_step_info)
 
     logger.info("Evaluation complete.")
     print("Evaluation complete.")

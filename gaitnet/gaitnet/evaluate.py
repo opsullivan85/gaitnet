@@ -38,8 +38,12 @@ simulation_app = app_launcher.app
 import torch
 from gaitnet.gaitnet.util import get_checkpoint_path
 from gaitnet.gaitnet.components.gaitnet_env import GaitNetEnv
+from gaitnet.gaitnet.components.gaitnet_observation_manager import (
+    GaitNetObservationManager,
+)
 from gaitnet.gaitnet.env_cfg.gaitnet_env_cfg import get_env
 from gaitnet.util import log_exceptions
+from gaitnet.util.dense_sampling import dense_policy_obs
 from gaitnet.gaitnet import gaitnet
 import re
 from pathlib import Path
@@ -60,6 +64,11 @@ def load_model(checkpoint_path: Path, device: torch.device, deterministic: bool)
         unique_state_dim=const.gait_net.footstep_option_dim,
         unique_layer_sizes=[64, 64],
         trunk_layer_sizes=[128, 128, 128],
+        # training defaults, both off for evaluation: dense sampling compares
+        # thousands of nearby options, so bf16's ~3 significant digits is enough
+        # to perturb the selection, and checkpointing only helps when backpropagating
+        checkpoint_chunk_size=None,
+        use_bf16=False,
     )
     if deterministic:
         agent = model
@@ -69,8 +78,12 @@ def load_model(checkpoint_path: Path, device: torch.device, deterministic: bool)
     state_dict = checkpoint["model_state_dict"]
     if deterministic:
         state_dict = {re.sub(r"^actor\.", "", k): v for k, v in state_dict.items() if k.startswith("actor.")}
-    else:  # remove all critic keys
-        state_dict = {k: v for k, v in state_dict.items() if k.startswith("actor.")}
+    else:  # keep the actor and the learned duration std, drop the critic
+        state_dict = {
+            k: v
+            for k, v in state_dict.items()
+            if k.startswith("actor.") or k == "duration_log_std"
+        }
     agent.load_state_dict(state_dict)
     agent.to(device)
     return agent
@@ -100,10 +113,26 @@ def main():
 
     with torch.inference_mode():
         while True:
+            # score every cell of every leg rather than the sampler's random subset
+            option_manager: GaitNetObservationManager = env.observation_manager  # type: ignore
+            # the observation manager replaces the terrain scan with the footstep
+            # options it sampled, so rebuild the raw observation dense sampling needs
+            raw_obs = torch.cat(
+                [
+                    obs["policy"][:, : const.gait_net.robot_state_dim],
+                    option_manager.most_recent_terrain_obs,
+                ],
+                dim=1,
+            )
+            options, policy_obs = dense_policy_obs(raw_obs)
+            # the action term resolves the chosen index against the manager's option
+            # set, so it has to see the dense set, not the one the sampler generated
+            option_manager.footstep_options = options
+
             if deterministic:
-                actions = gaitnet.GaitnetActor.act_inference(model, obs)
-            if not deterministic:
-                actions = model.act(obs)
+                actions = gaitnet.GaitnetActor.act_inference(model, policy_obs)
+            else:
+                actions = model.act({**obs, "policy": policy_obs})
             log_action(actions, env)
             obs, rew, terminated, truncated, info = env.step(actions)
 
