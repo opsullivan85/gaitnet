@@ -80,6 +80,9 @@ logger = get_logger()
 # how much further than the furthest reachable point a sub-terrain extends
 _terrain_length_margin = 1.25
 _minimum_terrain_length = 4.0
+# the collision mesh the old one-difficulty-per-process sweep cooked, and the largest
+# that is known to work here
+_triangle_budget = 6.4e6
 
 
 def load_model(checkpoint_path: Path, device: torch.device) -> gaitnet.GaitnetActor:
@@ -132,10 +135,24 @@ def build_env_cfg(
 
     if terrain_length is None:
         terrain_length = sub_terrain_length(args_cli.velocities, env_cfg.episode_length_s)
+    # the whole grid is cooked into one collision mesh, and it is the thing that grows
+    # when the sweep is packed into a single scene -- a lost-contact failure (robots
+    # sinking through the ground) shows up here first
+    generator = env_cfg.scene.terrain.terrain_generator
+    scale = generator.horizontal_scale  # type: ignore
+    triangles = num_envs * round((terrain_length / scale - 1) * (1.0 / scale - 1) * 2)
     logger.info(
         f"terrain: {len(difficulties)} difficulties x {envs_per_difficulty} envs,"
-        f" {terrain_length:.1f}m sub-terrains, {num_envs} environments"
+        f" {terrain_length:.1f}m sub-terrains, {num_envs} environments,"
+        f" ~{triangles / 1e6:.1f}M collision triangles"
     )
+    if triangles > _triangle_budget:
+        logger.warning(
+            f"~{triangles / 1e6:.1f}M collision triangles exceeds the {_triangle_budget / 1e6:.1f}M"
+            " that the per-difficulty sweep used to cook. If robots terminate immediately on"
+            " foot_below_ground, they are falling through the terrain: lower"
+            " --terrain-length or --envs-per-difficulty."
+        )
     make_eval_terrain(
         env_cfg.scene.terrain,
         difficulties=tuple(difficulties),

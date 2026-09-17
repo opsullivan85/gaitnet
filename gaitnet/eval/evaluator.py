@@ -11,7 +11,9 @@ import torch
 from isaaclab.assets import ArticulationData
 from isaaclab.envs import ManagerBasedRLEnv, VecEnvObs, VecEnvStepReturn
 
-from gaitnet import PROJECT_ROOT
+from gaitnet import PROJECT_ROOT, get_logger
+
+logger = get_logger()
 
 data_folder = PROJECT_ROOT / "data" / "evaluations"
 data_folder.mkdir(parents=True, exist_ok=True)
@@ -52,6 +54,21 @@ class Evaluator:
 
         self._reset_buffers()
 
+    def _log_termination_breakdown(self) -> None:
+        """Log which termination term ended each episode.
+
+        The distance alone cannot tell a robot that walked off the terrain from one that
+        fell over on the spot, and a sweep where every robot dies at once looks identical
+        in the csv to one where every robot walks. The per-term counts say which.
+        """
+        manager = self.env.termination_manager
+        counts = {
+            name: int(manager.get_term(name).sum().item()) for name in manager.active_terms
+        }
+        total = self.env.num_envs
+        breakdown = ", ".join(f"{name}={count}" for name, count in counts.items() if count)
+        logger.info(f"terminations over {total} envs after {self.steps} steps: {breakdown or 'none'}")
+
     def _write_trial(self) -> None:
         trial = self.trials - self.remaining_trials + 1
         distances = self.terminal_distances.cpu().numpy()
@@ -66,6 +83,7 @@ class Evaluator:
         self.dones = torch.zeros(self.env.num_envs, dtype=torch.bool, device=self.env.device)
         self.terminal_distances = torch.zeros(self.env.num_envs, dtype=torch.float, device=self.env.device)
         self.truncations = torch.zeros(self.env.num_envs, dtype=torch.bool, device=self.env.device)
+        self.steps = 0
 
     @property
     def done(self) -> bool:
@@ -84,6 +102,7 @@ class Evaluator:
         """
         observations, rew, terminated, truncated, info = data
         dones = torch.logical_or(truncated, terminated)
+        self.steps += 1
 
         robot_data: ArticulationData = self.env.scene["robot"].data
 
@@ -98,6 +117,7 @@ class Evaluator:
         if not torch.all(self.dones):
             return None
 
+        self._log_termination_breakdown()
         self._write_trial()
         self.remaining_trials -= 1
         if self.done:
