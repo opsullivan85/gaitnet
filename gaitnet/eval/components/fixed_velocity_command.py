@@ -20,7 +20,22 @@ class FixedVelocityCommand(CommandTerm):
         """
         # initialize the base class
         super().__init__(cfg, env)  # type: ignore
-        self._command = torch.tensor(cfg.command, device=env.device).unsqueeze(0).expand(env.num_envs, -1)  # type: ignore
+        # materialised rather than expanded so `set_command` can write into it
+        self._command = torch.zeros((env.num_envs, 3), device=env.device)
+        self.set_command(cfg.command)
+
+    def set_command(self, command: tuple[float, float, float]) -> None:
+        """Overwrite the command for every environment.
+
+        The evaluation sweep reuses one scene across commanded velocities, so this is
+        how the velocity axis is swept without rebuilding the environment.
+
+        Args:
+            command: The fixed command (vx, vy, wz) to apply to every environment.
+        """
+        self._command[:] = torch.as_tensor(
+            command, device=self._command.device, dtype=self._command.dtype
+        )
     
     @property
     def command(self) -> torch.Tensor:

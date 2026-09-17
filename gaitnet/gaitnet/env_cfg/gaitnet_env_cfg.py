@@ -83,7 +83,7 @@ def get_env_cfg(num_envs: int, device: str) -> GaitNetEnvCfg:
 
 def update_controllers(
     cfg: GaitNetEnvCfg, num_envs: int, shared_memory: bool = False
-) -> None:
+) -> VectorPool[Sim2RealInterface]:
     """Update the controllers in the environment configuration.
 
     Args:
@@ -92,6 +92,10 @@ def update_controllers(
         shared_memory (bool): Pass controller inputs and outputs through shared memory
             instead of pickling them over pipes. Off by default since transport is
             under 2% of pool call time; MPC compute dominates.
+
+    Returns:
+        The pool, so a caller that owns it can shut it down. The worker processes are
+        not daemons, so an interpreter that leaves them running hangs on exit.
     """
     pool_class = SharedMemoryVectorPool if shared_memory else VectorPool
     controllers: VectorPool[Sim2RealInterface] = pool_class(
@@ -102,6 +106,7 @@ def update_controllers(
         debug_logging=False,
     )
     cfg.robot_controllers = controllers  # type: ignore
+    return controllers
 
 # generic for manager_class
 T = TypeVar("T", bound=ManagerBasedRLEnv)

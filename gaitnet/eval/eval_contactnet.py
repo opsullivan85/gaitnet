@@ -1,3 +1,10 @@
+"""Evaluate ContactNet on a single (difficulty, velocity) configuration.
+
+Out of date: `Evaluator` now takes `EvalGroup`s rather than a single output name, and
+the sweep it used to be driven by (`eval_all`) evaluates every configuration in one
+process. This script has not been ported.
+"""
+
 from isaaclab.app import AppLauncher
 import argparse
 
