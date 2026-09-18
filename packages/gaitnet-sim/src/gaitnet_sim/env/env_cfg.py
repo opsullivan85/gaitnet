@@ -25,7 +25,7 @@ from isaaclab_physx.physics import PhysxCfg
 
 from gaitnet_core.features import DEFAULT_FEATURES
 from gaitnet_sim.env import curriculum, observations, rewards, terminations
-from gaitnet_sim.env.actions import FootstepControlActionCfg
+from gaitnet_sim.env.actions_cfg import FootstepControlActionCfg
 from gaitnet_sim.env.contract import GaitNetCfg
 from gaitnet_sim.env.scene import GaitNetSceneCfg
 
