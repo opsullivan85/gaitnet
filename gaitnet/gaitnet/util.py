@@ -1,31 +1,33 @@
 from pathlib import Path
 from gaitnet import PROJECT_ROOT
-import argparse
 from gaitnet import get_logger
 
 logger = get_logger()
 
-parser = argparse.ArgumentParser(description="Gaitnet Utilities")
-parser.add_argument(
-    "--checkpoint-name-gaitnet",
-    type=str,
-    default=None,
-    help="Path to the model checkpoint to evaluate. Should be the name of a folder within training/gaitnet/runs.",
-)
-args, unused_args = parser.parse_known_args()
+
+def add_checkpoint_arg(parser) -> None:
+    """Add the checkpoint selection flag to an entry point's argument parser."""
+    parser.add_argument(
+        "--checkpoint-name-gaitnet",
+        "--checkpoint_path",
+        dest="checkpoint_name",
+        type=str,
+        default=None,
+        help="Checkpoint file or run folder within training/gaitnet/runs. Defaults to the most recent run.",
+    )
 
 
-def get_checkpoint_path() -> Path:
-    """Get the path to the most recent model checkpoint.
+def get_checkpoint_path(checkpoint_name: str | None = None) -> Path:
+    """Get the path to a model checkpoint.
 
-    If "--checkpoint-name" argument is provided, use that path. Otherwise, return the most recent checkpoint.
+    Args:
+        checkpoint_name: A checkpoint file or run folder within training/gaitnet/runs.
+            A folder resolves to its newest checkpoint. None uses the most recent run.
 
     Returns:
         Path: Path to the model checkpoint.
     """
     checkpoint_dir = PROJECT_ROOT / "training" / "gaitnet" / "runs"
-    checkpoint_name: str|None = args.checkpoint_name_gaitnet
-
     if checkpoint_name is None:
         # no checkpoint name provided, use most recent checkpoint folder sorted by name
         # gaitnet_YYYYMMDD_HHMMSS

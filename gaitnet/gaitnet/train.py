@@ -1,7 +1,10 @@
+from gaitnet import setup_logging
+
+setup_logging()
+
 from isaaclab.app import AppLauncher
 import argparse
 
-from gaitnet.control.mpc.convex_MPC import Gait
 
 # add argparse arguments
 parser = argparse.ArgumentParser(

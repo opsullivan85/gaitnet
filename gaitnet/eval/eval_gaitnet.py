@@ -7,6 +7,10 @@ The velocity axis needs nothing but a new value in the command term. That leaves
 Omniverse boot, one terrain cook and one controller pool for the entire sweep.
 """
 
+from gaitnet import setup_logging
+
+setup_logging()
+
 from isaaclab.app import AppLauncher
 import argparse
 
@@ -41,6 +45,9 @@ parser.add_argument(
     " walk in an episode, with margin. Robots spawn at the centre, so only half of"
     " this is forward runway.",
 )
+from gaitnet.gaitnet.util import add_checkpoint_arg
+
+add_checkpoint_arg(parser)
 # append AppLauncher cli args
 AppLauncher.add_app_launcher_args(parser)
 # parse the arguments
@@ -249,7 +256,7 @@ def run_velocity(
 
 def main():
     device = torch.device(args_cli.device)
-    model = load_model(get_checkpoint_path(), device)
+    model = load_model(get_checkpoint_path(args_cli.checkpoint_name), device)
     model.eval()
 
     difficulties: list[float] = args_cli.difficulties

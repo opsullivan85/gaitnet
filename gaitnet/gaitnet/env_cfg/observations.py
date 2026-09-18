@@ -17,7 +17,6 @@ import isaaclab.utils.math as math_utils
 from gaitnet.util.vectorpool import VectorPool
 from gaitnet.sim2real.abstractinterface import Sim2RealInterface
 from gaitnet import get_logger
-from gaitnet.util.data_logging import save_fig, save_img
 import gaitnet.constants as const
 
 logger = get_logger()

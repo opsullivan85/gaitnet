@@ -15,12 +15,13 @@ import os
 import subprocess
 import sys
 
-from gaitnet import PROJECT_ROOT, get_logger
+from gaitnet import PROJECT_ROOT, get_logger, setup_logging
 
 logger = get_logger()
 
 
 def main():
+    setup_logging()
     os.chdir(PROJECT_ROOT)
     subprocess_args = [
         sys.executable,

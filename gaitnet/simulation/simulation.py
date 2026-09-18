@@ -1,3 +1,7 @@
+from gaitnet import setup_logging
+
+setup_logging()
+
 import argparse
 import signal
 

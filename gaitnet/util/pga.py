@@ -139,7 +139,6 @@ def generate_footstep_action(
                         leg_one_hot,
                         x.unsqueeze(-1),
                         y.unsqueeze(-1),
-                        torch.zeros_like(x.unsqueeze(-1)),
                     ],
                     dim=-1,
                 )
@@ -207,14 +206,13 @@ def generate_footstep_action(
         x = x.detach().requires_grad_(True)
         y = y.detach().requires_grad_(True)
         
-        # Build observation: (batch, num_samples, state_dim + 5 + 3)
+        # Build observation: (batch, num_samples, state_dim + 5 + 2)
         observation = torch.cat(
             [
                 state_expanded,
                 leg_one_hot,
                 x.unsqueeze(-1),
                 y.unsqueeze(-1),
-                torch.zeros_like(x.unsqueeze(-1)),
             ],
             dim=-1,
         )
@@ -252,7 +250,6 @@ def generate_footstep_action(
                 leg_one_hot,
                 x.unsqueeze(-1),
                 y.unsqueeze(-1),
-                torch.zeros_like(x.unsqueeze(-1)),
             ],
             dim=-1,
         )
@@ -379,7 +376,6 @@ def _generate_pga_debug_plot(
                 leg_one_hot,
                 eval_x.unsqueeze(-1),
                 eval_y.unsqueeze(-1),
-                torch.zeros_like(eval_x.unsqueeze(-1)),
             ],
             dim=-1,
         )
