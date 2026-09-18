@@ -48,7 +48,10 @@ class ObservationsCfg:
         )
 
     state: StateCfg = StateCfg()
-    terrain: TerrainCfg = TerrainCfg()
+    # Off by default: RSL-RL keeps every group in its rollout buffer, and terrain patches cost
+    # ~4 GB at 1024 envs x 250 steps. Variants whose networks read terrain set
+    # `observations.terrain = ObservationsCfg.TerrainCfg()`.
+    terrain: TerrainCfg | None = None
     candidates: CandidatesCfg = CandidatesCfg()
 
 

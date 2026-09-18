@@ -6,6 +6,13 @@ FROM ${ISAACLAB_IMAGE}
 
 USER root
 
+# MLflow's client for training runs (gaitnet_sim.rl.mlflow_writer). Its OpenTelemetry
+# dependency caps protobuf below 7, so this replaces the venv's protobuf 7.36.0rc1 with
+# 6.33.6, which still meets every declared requirement (onnx, tensorboard, isaaclab); onnx,
+# tensorboard and a Kit boot were checked against it.
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install mlflow-skinny==3.16.1
+
 # The compiled MPC gets a regular install, so the extension built for this Python lives in
 # site-packages where the bind-mounted checkout can't shadow it. Its own layer: it changes
 # rarely and takes a while to compile.

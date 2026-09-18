@@ -34,11 +34,40 @@ directory is the checkout, bind-mounted at `/workspace/gaitnet`:
 # scripted walk, the sim smoke test
 docker compose -f docker/compose.yaml run --rm sim -m gaitnet_sim.scripts.walk --num_envs 4
 
+# train (Isaac Lab's train entry point: --max_iterations, --seed, --checkpoint, ... and
+# Hydra overrides such as agent.algorithm.entropy_coef=0.01 all work)
+docker compose -f docker/compose.yaml run --rm sim -m gaitnet_sim.scripts.train --task GaitNet-Holes --num_envs 1024
+
+# a policy bundle from a run, by directory or MLflow run id
+docker compose -f docker/compose.yaml run --rm sim -m gaitnet_sim.scripts.export_bundle \
+    --run logs/rsl_rl/gaitnet_holes/<timestamp> --out data/bundles/policy.pt
+
+# evaluate a bundle across terrain difficulties and velocities (writes data/evaluations/*.csv)
+docker compose -f docker/compose.yaml run --rm sim -m gaitnet_sim.scripts.eval_sweep --bundle data/bundles/policy.pt
+
+# tests (core and the sim package's simulator-free ones)
+docker compose -f docker/compose.yaml run --rm sim -m pytest packages/gaitnet-core/tests packages/gaitnet-sim/tests
+
 # a shell
 docker compose -f docker/compose.yaml run --rm --entrypoint bash sim
 ```
 
-Files the container writes to the checkout belong to uid 1000, the image's `isaaclab` user.
+Runs are written to `logs/rsl_rl/<experiment>/<timestamp>` in the checkout and tracked in
+MLflow. Files the container writes to the checkout belong to uid 1000, the image's
+`isaaclab` user.
+
+## MLflow
+
+Service `mlflow` (`ghcr.io/mlflow/mlflow:v3.16.1`) starts with any `sim` run and keeps
+running; the UI is at http://localhost:5000. Its database and artifacts (checkpoints, each
+run's `params/`, exported bundles) live in the `gaitnet_mlflow-data` volume. The sim image's
+MLflow client replaces the Isaac Lab venv's protobuf 7.36.0rc1 with 6.33.6, see
+`Dockerfile.sim`.
+
+```bash
+docker compose -f docker/compose.yaml up -d mlflow   # start it on its own
+docker compose -f docker/compose.yaml stop mlflow
+```
 
 Kit, shader, asset and warp caches live in named volumes (`gaitnet_kit-cache`, ...), so only
 the first run pays for shader compilation and asset downloads.

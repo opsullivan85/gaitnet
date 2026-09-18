@@ -13,6 +13,8 @@ dependencies = [
     "gaitnet-core",
     "gaitnet-mpc",
     "rsl-rl-lib==5.5.1",
+    "mlflow-skinny==3.16.1",
+    "pyyaml",
 ]
 
 [tool.setuptools.packages.find]
