@@ -23,8 +23,10 @@ def coordinateRotation(axis:CoordinateAxis, theta:float) -> np.ndarray:
     coordinateRotation(CoordinateAxis:X, .1) * v will rotate v by -.1 radians
     this transforms into a frame rotated by .1 radians!.
     """
-    s = sin(float(theta))
-    c = cos(float(theta))
+    # callers pass one-element arrays too; float() of those fails on numpy >= 2.5
+    theta = np.asarray(theta).item()
+    s = sin(theta)
+    c = cos(theta)
     R:np.ndarray = None
     if axis is CoordinateAxis.X:
         R = np.array([1, 0, 0, 0, c, s, 0, -s, c], dtype=DTYPE).reshape((3,3))

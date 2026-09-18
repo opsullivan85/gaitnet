@@ -401,6 +401,10 @@ class VectorPool(Generic[T]):
         self.workers.clear()
         self.pipes.clear()
 
+    def close(self) -> None:
+        """Shut down the workers. Safe to call more than once."""
+        self._cleanup()
+
     def __del__(self) -> None:
         """Cleanup when object is destroyed."""
         self._cleanup()

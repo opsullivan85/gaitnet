@@ -143,9 +143,10 @@ celerybeat.pid
 .env
 .envrc
 .venv
-env/
-venv/
-ENV/
+# root only: packages have env/ modules (gaitnet_sim.env)
+/env/
+/venv/
+/ENV/
 env.bak/
 venv.bak/
 

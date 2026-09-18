@@ -137,7 +137,9 @@ class LegController:
         dz1 = -self._quadruped._hipLinkLength
         dz2 = -self._quadruped._kneeLinkLength
 
-        q = self.datas[leg].q
+        # (3,) view of the (3, 1) column: math.sin needs scalars (numpy >= 2.5 won't convert
+        # a one-element array)
+        q = self.datas[leg].q[:, 0]
 
         s1 = sin(q[0])
         s2 = sin(q[1])

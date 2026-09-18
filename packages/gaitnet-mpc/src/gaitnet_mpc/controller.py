@@ -104,6 +104,11 @@ class MpcFootstepController:
         """(4, 1) float32 duration of each leg's most recent swing, kept after touchdown."""
         return self.robot_runner.cMPC.gait.swing_durations
 
+    def get_estimated_rpy(self) -> np.ndarray:
+        """(3,) roll, pitch, yaw (rad) of the base as the controller's state estimator sees
+        it after the last `get_torques` call. For checking the body state convention."""
+        return self.robot_runner._stateEstimator.getResult().rpy.flatten().astype(np.float32)
+
     def get_gait_timing(self) -> np.ndarray:
         """The scheduled gait timing of each leg, (4, 3) float32.
 

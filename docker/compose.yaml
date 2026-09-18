@@ -1,0 +1,55 @@
+# GaitNet containers. From the repository root:
+#
+#   docker/build_isaaclab.sh                          # once per Isaac Lab pin, slow
+#   docker compose -f docker/compose.yaml build sim
+#   docker compose -f docker/compose.yaml run --rm sim -m gaitnet_sim.scripts.walk
+#
+# See docker/README.md.
+name: gaitnet
+
+x-gpu: &gpu
+  resources:
+    reservations:
+      devices:
+        - driver: nvidia
+          count: all
+          capabilities: [gpu]
+
+services:
+  sim:
+    image: gaitnet/sim:dev
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.sim
+    deploy: *gpu
+    # shared memory for the controller pool and torch
+    ipc: host
+    environment:
+      ACCEPT_EULA: "Y"
+      PRIVACY_CONSENT: "Y"
+      ISAACSIM_PATH: /workspace/isaaclab/_isaac_sim
+    working_dir: /workspace/gaitnet
+    volumes:
+      # the checkout, live: the gaitnet packages are installed editable from here
+      - type: bind
+        source: ..
+        target: /workspace/gaitnet
+      # Kit, shader and asset caches, so later runs start faster
+      - kit-cache:/isaac-sim/kit/cache
+      - kit-data:/isaac-sim/kit/data
+      - ov-cache:/root/.cache/ov
+      - gl-cache:/root/.cache/nvidia/GLCache
+      - compute-cache:/root/.nv/ComputeCache
+      - warp-cache:/root/.cache/warp
+      - ov-logs:/root/.nvidia-omniverse/logs
+      - ov-data:/root/.local/share/ov/data
+
+volumes:
+  kit-cache:
+  kit-data:
+  ov-cache:
+  gl-cache:
+  compute-cache:
+  warp-cache:
+  ov-logs:
+  ov-data:
