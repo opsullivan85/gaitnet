@@ -13,7 +13,7 @@ from isaaclab.utils import configclass
 from gaitnet_core.grid import FootholdGrid
 from gaitnet_core.robot_spec import LEG_NAMES
 from gaitnet_sim.env.contract import GaitNetCfg
-from gaitnet_sim.robot import GO1_TORQUE_CFG, HIP_NAMES
+from gaitnet_sim.robot import BASE_NAME, GO1_TORQUE_CFG, HIP_NAMES
 from gaitnet_sim.terrains import holes_terrain_cfg
 
 SCANNER_NAMES: tuple[str, ...] = tuple(f"{leg}_scanner" for leg in LEG_NAMES)
@@ -58,6 +58,16 @@ class GaitNetSceneCfg(InteractiveSceneCfg):
     RR_scanner: RayCasterCfg = foothold_scanner_cfg(HIP_NAMES[3], _GRID)
 
     contact_forces: ContactSensorCfg = ContactSensorCfg(prim_path="{ENV_REGEX_NS}/Robot/.*_foot")
+    # the ground under the trunk, for terrain-relative terminations; yaw aligned like the
+    # foothold scanners, so its frame (`data.pos_w`) is the base origin
+    base_scanner: RayCasterCfg = RayCasterCfg(
+        prim_path=f"{{ENV_REGEX_NS}}/Robot/{BASE_NAME}",
+        offset=RayCasterCfg.OffsetCfg(pos=(0.0, 0.0, 20.0)),
+        ray_alignment="yaw",
+        pattern_cfg=patterns.GridPatternCfg(resolution=0.05, size=(0.3, 0.15)),
+        mesh_prim_paths=["/World/ground"],
+        debug_vis=False,
+    )
 
     light: AssetBaseCfg = AssetBaseCfg(
         prim_path="/World/Light",

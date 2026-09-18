@@ -115,6 +115,13 @@ class RobotIO:
             command=command,
         )
 
+    def foot_heights(self) -> torch.Tensor:
+        """(N, L) each foot's height relative to its hip (m), vertical, as `terrain()` measures
+        heights."""
+        feet_z = self.robot.data.body_link_pos_w.torch[:, self.foot_ids, 2]
+        hips_z = torch.stack([scanner.data.pos_w.torch[:, 2] for scanner in self.scanners], dim=1)
+        return feet_z - hips_z
+
     def terrain(self) -> TerrainPatch:
         """Terrain heights relative to each hip, -inf where a ray found nothing."""
         patches = []

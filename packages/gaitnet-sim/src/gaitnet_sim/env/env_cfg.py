@@ -28,6 +28,7 @@ from gaitnet_sim.env import curriculum, observations, rewards, terminations
 from gaitnet_sim.env.actions_cfg import FootstepControlActionCfg
 from gaitnet_sim.env.contract import GaitNetCfg
 from gaitnet_sim.env.scene import GaitNetSceneCfg
+from gaitnet_sim.terrains import pillars_terrain_cfg
 
 
 @configclass
@@ -99,11 +100,9 @@ class RewardsCfg:
 class TerminationsCfg:
     time_out = DoneTerm(func=mdp.time_out, time_out=True)
     bad_orientation = DoneTerm(func=mdp.bad_orientation, params={"limit_angle": math.radians(20)})
-    bad_height = DoneTerm(func=mdp.root_height_below_minimum, params={"minimum_height": 0.15})
-    foot_below_ground = DoneTerm(
-        func=terminations.bodies_below_height,
-        params={"minimum_height": -0.05, "asset_cfg": SceneEntityCfg("robot", body_names=".*_foot")},
-    )
+    # relative to the terrain, so they mean the same on holes and on pillars
+    bad_height = DoneTerm(func=terminations.base_below_terrain_clearance, params={"minimum_height": 0.15})
+    foot_below_ground = DoneTerm(func=terminations.feet_below_walkable_terrain, params={"margin": 0.05})
     terrain_out_of_bounds = DoneTerm(
         func=terminations.out_of_terrain, params={"distance_buffer": 0.5}, time_out=True
     )
@@ -149,8 +148,8 @@ class CurriculumCfg:
 
 
 @configclass
-class GaitNetHolesEnvCfg(ManagerBasedRLEnvCfg):
-    """Training on randomly holed flat ground, difficulty = fraction of holes."""
+class GaitNetEnvCfg(ManagerBasedRLEnvCfg):
+    """Everything but the terrain type, which the task variants below choose."""
 
     gaitnet: GaitNetCfg = GaitNetCfg()
     scene: GaitNetSceneCfg = GaitNetSceneCfg(num_envs=1024, env_spacing=2.5)
@@ -184,3 +183,17 @@ class GaitNetHolesEnvCfg(ManagerBasedRLEnvCfg):
         generator = self.scene.terrain.terrain_generator
         if generator is not None:
             generator.curriculum = getattr(self.curriculum, "terrain_levels", None) is not None
+
+
+@configclass
+class GaitNetHolesEnvCfg(GaitNetEnvCfg):
+    """Randomly holed flat ground; difficulty is the fraction of holes."""
+
+
+@configclass
+class GaitNetPillarsEnvCfg(GaitNetEnvCfg):
+    """Square pillars at random heights; difficulty widens the gaps and the height spread."""
+
+    def __post_init__(self):
+        self.scene.terrain = pillars_terrain_cfg()
+        super().__post_init__()

@@ -8,22 +8,45 @@ import torch
 
 from isaaclab.managers import SceneEntityCfg
 
+from gaitnet_sim.env.observations import footstep_action
+
 if TYPE_CHECKING:
-    from isaaclab.assets import Articulation
     from isaaclab.envs import ManagerBasedRLEnv
+    from isaaclab.sensors import RayCaster
 
 
-def bodies_below_height(
-    env: "ManagerBasedRLEnv", minimum_height: float, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")
+def base_below_terrain_clearance(
+    env: "ManagerBasedRLEnv", minimum_height: float, sensor_cfg: SceneEntityCfg = SceneEntityCfg("base_scanner")
 ) -> torch.Tensor:
-    """Any of `asset_cfg.body_ids` below `minimum_height` in world z.
+    """The base came within `minimum_height` of the highest surface under the trunk.
 
-    World z is only meaningful on terrain whose surface is at z = 0 (holes); terrain with
-    height needs a terrain-relative check.
+    `sensor_cfg` is a ray caster on the base, yaw aligned, whose pattern covers the trunk's
+    footprint. On flat ground this is the base's height above the ground.
     """
-    asset: Articulation = env.scene[asset_cfg.name]
-    heights = asset.data.body_link_pos_w.torch[:, asset_cfg.body_ids, 2]
-    return torch.any(heights < minimum_height, dim=1)
+    scanner: RayCaster = env.scene.sensors[sensor_cfg.name]
+    hits = scanner.data.ray_hits_w.torch[..., 2]
+    hits = torch.where(torch.isfinite(hits), hits, torch.full_like(hits, float("-inf")))
+    clearance = scanner.data.pos_w.torch[:, 2] - hits.amax(dim=1)
+    return clearance < minimum_height
+
+
+def feet_below_walkable_terrain(
+    env: "ManagerBasedRLEnv", margin: float = 0.05, action_name: str = "footstep"
+) -> torch.Tensor:
+    """A foot is more than `margin` below the lowest walkable surface around its hip: it has
+    gone into a hole or off the edge of a pillar.
+
+    Walkable cells are those of the leg's terrain patch within the robot's reach band;
+    voids fall below it. A leg with no walkable cell in view is judged against the bottom
+    of the reach band. On flat holed ground this is the foot's depth below the ground.
+    """
+    term = footstep_action(env, action_name)
+    heights = term.terrain().heights
+    lowest, highest = term.spec.reach_band
+    walkable = (heights >= lowest) & (heights <= highest)
+    lowest_walkable = torch.where(walkable, heights, torch.full_like(heights, float("inf"))).amin(dim=(-2, -1))
+    reference = torch.where(torch.isinf(lowest_walkable), torch.full_like(lowest_walkable, lowest), lowest_walkable)
+    return torch.any(term.io.foot_heights() < reference - margin, dim=1)
 
 
 def out_of_terrain(
