@@ -15,7 +15,7 @@ from gaitnet.gaitnet.env_cfg.events import EventsCfg
 from gaitnet.gaitnet.env_cfg.terminations import TerminationsCfg
 from gaitnet.gaitnet.env_cfg.rewards import RewardsCfg
 from gaitnet.gaitnet.env_cfg.commands import CommandsCfg
-from gaitnet.util import SharedMemoryVectorPool, VectorPool
+from gaitnet_mpc.pool import SharedMemoryVectorPool, VectorPool
 
 logger = get_logger()
 

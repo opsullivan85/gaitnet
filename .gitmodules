@@ -1,3 +1,4 @@
-[submodule "gaitnet/control"]
-	path = gaitnet/control
-	url = https://github.com/opsullivan85/rl-mpc-locomotion.git
+[submodule "packages/gaitnet-mpc/extern/eigen3"]
+	path = packages/gaitnet-mpc/extern/eigen3
+	url = https://gitlab.com/libeigen/eigen.git
+	branch = 3.3

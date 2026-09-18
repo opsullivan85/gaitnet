@@ -14,7 +14,7 @@ from isaaclab.envs.utils.io_descriptors import (
 )
 import torch.nn.functional as F
 import isaaclab.utils.math as math_utils
-from gaitnet.util.vectorpool import VectorPool
+from gaitnet_mpc.pool import VectorPool
 from gaitnet.sim2real.abstractinterface import Sim2RealInterface
 from gaitnet import get_logger
 import gaitnet.constants as const

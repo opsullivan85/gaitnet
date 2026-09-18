@@ -10,7 +10,7 @@ import numpy as np
 from nptyping import Float32, NDArray, Shape
 
 import gaitnet.sim2real.siminterface as SimInterface
-from gaitnet.util import VectorPool
+from gaitnet_mpc.pool import VectorPool
 from gaitnet.simulation.util import (
     interface_to_isaac_torques,
     isaac_body_to_interface,

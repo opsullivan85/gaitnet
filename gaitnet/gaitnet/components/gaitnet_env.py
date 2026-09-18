@@ -12,7 +12,7 @@ from isaaclab.managers import (
 
 from gaitnet import get_logger
 from gaitnet.gaitnet.actions.mpc_action import ManagerBasedEnv
-from gaitnet.gaitnet.components.footstep_candidate_sampler import FootstepCandidateSampler
+from gaitnet_core.samplers import UniformJitter
 from gaitnet.gaitnet.components.gaitnet_observation_manager import (
     GaitNetObservationManager,
 )
@@ -47,10 +47,8 @@ class GaitNetEnv(ManagerBasedRLEnv):
         self.observation_manager = GaitNetObservationManager(
             cfg=self.cfg.observations,
             env=self,
-            footstep_option_generator=FootstepCandidateSampler(
-                options_per_leg=const.gait_net.num_footstep_options
-            ),
-            num_footstep_options=const.gait_net.num_footstep_options,
+            sampler=UniformJitter(const.gait_net.num_footstep_options),
+            candidates_per_leg=const.gait_net.num_footstep_options,
         )
         print("[INFO] Observation Manager:", self.observation_manager)
 

@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=70", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gaitnet-core"
+version = "0.1.0"
+description = "GaitNet footstep planner: sim/real contract, candidate samplers, networks, selection, runtime"
+requires-python = ">=3.11"
+dependencies = ["torch", "numpy"]
+
+[project.optional-dependencies]
+test = ["pytest"]
+
+[tool.setuptools.packages.find]
+where = ["src"]

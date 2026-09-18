@@ -50,9 +50,8 @@ from gaitnet.gaitnet.components.gaitnet_observation_manager import (
 )
 from gaitnet.gaitnet.env_cfg.gaitnet_env_cfg import get_env
 from gaitnet.util import log_exceptions
-from gaitnet.util.dense_sampling import dense_policy_obs
+from gaitnet.gaitnet.dense_eval import dense_actions, dense_candidates, load_actor, policy_obs
 from gaitnet.gaitnet import gaitnet
-import re
 from pathlib import Path
 import gaitnet.constants as const
 from gaitnet import get_logger
@@ -64,36 +63,15 @@ data_path.parent.mkdir(parents=True, exist_ok=True)
 logger = get_logger()
 
 
-def load_model(checkpoint_path: Path, device: torch.device, deterministic: bool) -> gaitnet.GaitnetActorCritic | gaitnet.GaitnetActor:
-    model = gaitnet.GaitnetActor(
-        shared_state_dim=const.gait_net.robot_state_dim,
-        shared_layer_sizes=[128, 128, 128],
-        unique_state_dim=const.gait_net.footstep_option_dim,
-        unique_layer_sizes=[64, 64],
-        trunk_layer_sizes=[128, 128, 128],
-        # training defaults, both off for evaluation: dense sampling compares
-        # thousands of nearby options, so bf16's ~3 significant digits is enough
-        # to perturb the selection, and checkpointing only helps when backpropagating
-        checkpoint_chunk_size=None,
-        use_bf16=False,
-    )
+def load_model(checkpoint_path: Path, device: torch.device, deterministic: bool):
+    actor = load_actor(checkpoint_path, device)
     if deterministic:
-        agent = model
-    else:
-        agent = gaitnet.GaitnetActorCritic(0, 0, 0, model, None)  # type: ignore
-    checkpoint = torch.load(checkpoint_path, map_location=device)
-    state_dict = checkpoint["model_state_dict"]
-    if deterministic:
-        state_dict = {re.sub(r"^actor\.", "", k): v for k, v in state_dict.items() if k.startswith("actor.")}
-    else:  # keep the actor and the learned duration std, drop the critic
-        state_dict = {
-            k: v
-            for k, v in state_dict.items()
-            if k.startswith("actor.") or k == "duration_log_std"
-        }
-    agent.load_state_dict(state_dict)
-    agent.to(device)
-    return agent
+        return actor
+    # keep the learned duration std for stochastic rollouts; the critic isn't needed
+    agent = gaitnet.GaitnetActorCritic(0, 0, 0, actor, None)  # type: ignore
+    state_dict = torch.load(checkpoint_path, map_location=device)["model_state_dict"]
+    agent.duration_log_std.data.copy_(state_dict["duration_log_std"])
+    return agent.to(device)
 
 def log_action(actions: torch.Tensor, env: GaitNetEnv):
     fsc = env.action_manager.get_term("footstep_controller")  # type: ignore
@@ -131,15 +109,15 @@ def main():
                 ],
                 dim=1,
             )
-            options, policy_obs = dense_policy_obs(raw_obs)
-            # the action term resolves the chosen index against the manager's option
-            # set, so it has to see the dense set, not the one the sampler generated
-            option_manager.footstep_options = options
+            candidates = dense_candidates(raw_obs)
+            # the action term resolves the chosen index against the manager's candidates,
+            # so it has to see the dense set, not the one the sampler generated
+            option_manager.candidates = candidates
 
             if deterministic:
-                actions = gaitnet.GaitnetActor.act_inference(model, policy_obs)
+                _, actions = dense_actions(model, raw_obs)
             else:
-                actions = model.act({**obs, "policy": policy_obs})
+                actions = model.act({**obs, "policy": policy_obs(raw_obs, candidates)})
             log_action(actions, env)
             obs, rew, terminated, truncated, info = env.step(actions)
 

@@ -32,8 +32,6 @@ class _GaitNet:
     See `gaitnet.gaitnet.env_cfg.observations_utils` for the layout."""
     max_stance_time_obs: float = 0.5
     """Time since touchdown (s) is clipped to this in observations, since it is otherwise unbounded."""
-    footstep_option_dim: int = 7
-    """Dimension of the footstep option input to GaitNet (unique state): leg one-hot (5, no-op first), dx, dy"""
 
 
 gait_net = _GaitNet()
@@ -80,8 +78,6 @@ class _Experiments:
     """If true, log swing duration statistics."""
     contact_schedule_logging: bool = False
     """If true, log contact schedule statistics, only for first robot."""
-    pga_debug_plots: bool = False
-    """If true, generate matplotlib debug plots showing PGA optimization evolution."""
 
 
 experiments = _Experiments()
