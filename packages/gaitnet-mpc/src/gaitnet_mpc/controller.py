@@ -89,7 +89,8 @@ class MpcFootstepController:
         return torques_control.reshape((4, 3))
 
     def initiate_footstep(self, leg: int, location_hip: np.ndarray, duration: float) -> None:
-        """Start a swing of `leg` to `location_hip`, (x, y) in that leg's hip frame, over `duration` s."""
+        """Start a swing of `leg` to `location_hip`, (x, y, z) relative to that leg's hip in
+        its gravity-aligned yaw frame (z negative below the hip), over `duration` s."""
         self.robot_runner.cMPC.initiate_footstep(leg, location_hip, duration)
 
     def get_contact_state(self) -> np.ndarray:

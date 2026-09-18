@@ -29,7 +29,7 @@ class FootSwingTrajectory:
 
     def setHeight(self, h:float):
         """
-        Set the maximum height of the swing
+        Set the swing apex's clearance above the higher of the start and final positions
         """
         self._height = h
 
@@ -56,14 +56,17 @@ class FootSwingTrajectory:
         self._v = cubicBezierFirstDerivative(self._p0, self._pf, phase) / swingTime
         self._a = cubicBezierSecondDerivative(self._p0, self._pf, phase) / (swingTime * swingTime)
 
+        # the apex clears the higher end, so a step up onto a raised foothold comes down
+        # onto it rather than approaching it from below
+        apex = max(self._p0[2], self._pf[2]) + self._height
         if phase < 0.5:
-            zp = cubicBezier(self._p0[2], self._p0[2] + self._height, phase * 2)
-            zv = cubicBezierFirstDerivative(self._p0[2], self._p0[2] + self._height, phase * 2) * 2 / swingTime
-            za = cubicBezierSecondDerivative(self._p0[2], self._p0[2] + self._height, phase * 2) * 4 / (swingTime * swingTime)
+            zp = cubicBezier(self._p0[2], apex, phase * 2)
+            zv = cubicBezierFirstDerivative(self._p0[2], apex, phase * 2) * 2 / swingTime
+            za = cubicBezierSecondDerivative(self._p0[2], apex, phase * 2) * 4 / (swingTime * swingTime)
         else:
-            zp = cubicBezier(self._p0[2] + self._height, self._pf[2], phase * 2 - 1)
-            zv = cubicBezierFirstDerivative(self._p0[2] + self._height, self._pf[2], phase * 2 - 1) * 2 / swingTime
-            za = cubicBezierSecondDerivative(self._p0[2] + self._height, self._pf[2], phase * 2 - 1) * 4 / (swingTime * swingTime)
+            zp = cubicBezier(apex, self._pf[2], phase * 2 - 1)
+            zv = cubicBezierFirstDerivative(apex, self._pf[2], phase * 2 - 1) * 2 / swingTime
+            za = cubicBezierSecondDerivative(apex, self._pf[2], phase * 2 - 1) * 4 / (swingTime * swingTime)
 
         self._p[2] = zp
         self._v[2] = zv
