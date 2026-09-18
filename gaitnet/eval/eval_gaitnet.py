@@ -36,7 +36,7 @@ parser.add_argument("--trials", type=int, default=1, help="Number of evaluation 
 parser.add_argument(
     "--terrain-length",
     type=float,
-    default=None,
+    default=4.0,
     help="Length of a sub-terrain in metres. Defaults to the furthest a robot could"
     " walk in an episode, with margin. Robots spawn at the centre, so only half of"
     " this is forward runway.",
