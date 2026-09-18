@@ -42,7 +42,9 @@ GO1_TORQUE_CFG.actuators = {
     ),
 }
 # the USD's baked-in foot material has unknown (likely low) friction, which would undercut
-# the terrain's friction once combined; "max" makes the higher of the two win
+# the terrain's friction once combined; "max" makes the higher of the two win. Isaac Lab 3's
+# Go1 has instanced collision prims, which can't take a material binding until uninstanced.
+GO1_TORQUE_CFG.spawn.make_uninstanceable = True
 GO1_TORQUE_CFG.spawn.physics_material = PhysxRigidBodyMaterialCfg(
     static_friction=1.5,
     dynamic_friction=1.5,

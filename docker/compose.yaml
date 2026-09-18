@@ -16,6 +16,25 @@ x-gpu: &gpu
           capabilities: [gpu]
 
 services:
+  # Experiment tracking: runs, metrics and artifacts (checkpoints, env/agent cfgs, bundles).
+  # UI on http://localhost:5000. Other containers reach it as mlflow:5000, which MLflow's
+  # host-header check has to be told about.
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v3.16.1
+    command:
+      - mlflow
+      - server
+      - --host=0.0.0.0
+      - --port=5000
+      - --backend-store-uri=sqlite:////mlflow/mlflow.db
+      - --artifacts-destination=/mlflow/artifacts
+      - --allowed-hosts=mlflow,mlflow:5000,localhost,localhost:5000,127.0.0.1,127.0.0.1:5000
+    ports:
+      - 127.0.0.1:5000:5000
+    volumes:
+      - mlflow-data:/mlflow
+    restart: unless-stopped
+
   sim:
     image: gaitnet/sim:dev
     build:
@@ -24,10 +43,13 @@ services:
     deploy: *gpu
     # shared memory for the controller pool and torch
     ipc: host
+    depends_on:
+      - mlflow
     environment:
       ACCEPT_EULA: "Y"
       PRIVACY_CONSENT: "Y"
       ISAACSIM_PATH: /workspace/isaaclab/_isaac_sim
+      MLFLOW_TRACKING_URI: http://mlflow:5000
     working_dir: /workspace/gaitnet
     volumes:
       # the checkout, live: the gaitnet packages are installed editable from here
@@ -45,6 +67,7 @@ services:
       - ov-data:/root/.local/share/ov/data
 
 volumes:
+  mlflow-data:
   kit-cache:
   kit-data:
   ov-cache:

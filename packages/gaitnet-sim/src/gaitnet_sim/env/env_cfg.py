@@ -25,7 +25,7 @@ from isaaclab_physx.physics import PhysxCfg
 
 from gaitnet_core.features import DEFAULT_FEATURES
 from gaitnet_sim.env import curriculum, observations, rewards, terminations
-from gaitnet_sim.env.actions import FootstepControlActionCfg
+from gaitnet_sim.env.actions_cfg import FootstepControlActionCfg
 from gaitnet_sim.env.contract import GaitNetCfg
 from gaitnet_sim.env.scene import GaitNetSceneCfg
 
@@ -48,7 +48,10 @@ class ObservationsCfg:
         )
 
     state: StateCfg = StateCfg()
-    terrain: TerrainCfg = TerrainCfg()
+    # Off by default: RSL-RL keeps every group in its rollout buffer, and terrain patches cost
+    # ~4 GB at 1024 envs x 250 steps. Variants whose networks read terrain set
+    # `observations.terrain = ObservationsCfg.TerrainCfg()`.
+    terrain: TerrainCfg | None = None
     candidates: CandidatesCfg = CandidatesCfg()
 
 

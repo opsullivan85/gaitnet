@@ -2,6 +2,9 @@
 **/data
 **/training
 **/events.out.tfevents.*
+# training runs (Isaac Lab's logs/rsl_rl/...) and a server-less MLflow store
+/logs/
+/mlruns/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

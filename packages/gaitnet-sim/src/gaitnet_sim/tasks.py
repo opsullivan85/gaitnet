@@ -8,6 +8,7 @@ import gymnasium as gym
 TASKS: dict[str, dict[str, str]] = {
     "GaitNet-Holes": {
         "env_cfg_entry_point": "gaitnet_sim.env.env_cfg:GaitNetHolesEnvCfg",
+        "rsl_rl_cfg_entry_point": "gaitnet_sim.rl.agent_cfg:GaitNetPpoRunnerCfg",
     },
 }
 

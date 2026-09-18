@@ -1,5 +1,5 @@
-# uv workspace root. The packages under packages/ are the project; the legacy gaitnet/
-# package at the root is being replaced by them (see the restructure plan).
+# uv workspace root; the project is the packages under packages/. The simulator runs in
+# Docker, see docker/README.md.
 [tool.uv.workspace]
 members = ["packages/gaitnet-core", "packages/gaitnet-mpc", "packages/gaitnet-sim"]
 

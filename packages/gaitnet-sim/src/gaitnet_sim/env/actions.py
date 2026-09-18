@@ -5,7 +5,9 @@ duration), the concrete footstep it resolves to, and a velocity command nudge. T
 reads only the footstep and nudge, so it never needs the candidate set.
 
 The term owns the controller. Observation and reward terms reach the controller, the
-nudged command and the robot's state through it (`footstep_action(env)`).
+nudged command and the robot's state through it (`footstep_action(env)`). Its cfg is in
+`gaitnet_sim.env.actions_cfg`, which names this class by string so task cfgs import
+without the simulator.
 """
 
 from __future__ import annotations
@@ -16,20 +18,18 @@ from typing import TYPE_CHECKING
 import torch
 
 from isaaclab.assets import Articulation
-from isaaclab.managers import ActionTerm, ActionTermCfg
-from isaaclab.utils import configclass
+from isaaclab.managers import ActionTerm
 
 from gaitnet_core import action_layout
 from gaitnet_core.action_layout import EnvAction
 from gaitnet_core.interfaces import FootstepCommand, LowLevelController
 from gaitnet_core.state import Observation, RobotState, TerrainPatch
-from gaitnet_sim import robot as go1
-from gaitnet_sim.controllers import PooledMpcControllerCfg
-from gaitnet_sim.env.scene import SCANNER_NAMES
 from gaitnet_sim.robot_io import RobotIO
 
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedRLEnv
+
+    from gaitnet_sim.env.actions_cfg import FootstepControlActionCfg
 
 
 class FootstepControlAction(ActionTerm):
@@ -106,11 +106,17 @@ class FootstepControlAction(ActionTerm):
         return Observation(self.robot_state(), self.terrain())
 
     def process_actions(self, actions: torch.Tensor):
+        # copied into the buffers made at init: tensors made here under torch.inference_mode
+        # (RSL-RL, evaluation) would refuse the in-place updates of a later reset outside it
         self._raw_actions[:] = actions
         action = EnvAction.decode(actions)
-        self._footsteps = action.footstep_command()
+        footsteps = action.footstep_command()
+        self._footsteps.active[:] = footsteps.active
+        self._footsteps.leg[:] = footsteps.leg
+        self._footsteps.target[:] = footsteps.target
+        self._footsteps.duration[:] = footsteps.duration
         if self.cfg.apply_nudge:
-            self._nudge = action.nudge.clone()
+            self._nudge[:] = action.nudge
         self.controller.command_footsteps(self._footsteps)
 
     def apply_actions(self):
@@ -129,25 +135,3 @@ class FootstepControlAction(ActionTerm):
         self._nudge[ids] = 0.0
         self._footsteps.active[ids] = False
         self.controller.reset(ids)
-
-
-@configclass
-class FootstepControlActionCfg(ActionTermCfg):
-    class_type: type[ActionTerm] = FootstepControlAction
-    asset_name: str = "robot"
-
-    controller: PooledMpcControllerCfg = PooledMpcControllerCfg()
-    """Any controller cfg whose `class_type` implements `LowLevelController`."""
-    command_name: str = "base_velocity"
-    """The command term holding the velocity command before the nudge."""
-    apply_nudge: bool = True
-    """Add the action's nudge to the command. The nudge is zero unless a feedback observer
-    produced one."""
-
-    joint_names: tuple[str, ...] = go1.JOINT_NAMES
-    foot_names: tuple[str, ...] = go1.FOOT_NAMES
-    contact_sensor_name: str = "contact_forces"
-    scanner_names: tuple[str, ...] = SCANNER_NAMES
-    """One foothold scanner per leg, in leg order."""
-    contact_threshold: float = 1.0
-    """Normal force above which a foot counts as in contact (N)."""
