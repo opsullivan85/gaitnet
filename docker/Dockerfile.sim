@@ -1,0 +1,34 @@
+# syntax=docker/dockerfile:1
+# GaitNet simulation image: Isaac Lab's own image (docker/build_isaaclab.sh, Isaac Sim 6.1 +
+# Isaac Lab 3.0 in a uv venv) plus the gaitnet packages. See docker/README.md.
+ARG ISAACLAB_IMAGE=gaitnet/isaaclab:3.0.0-11508e5
+FROM ${ISAACLAB_IMAGE}
+
+USER root
+
+# The compiled MPC gets a regular install, so the extension built for this Python lives in
+# site-packages where the bind-mounted checkout can't shadow it. Its own layer: it changes
+# rarely and takes a while to compile.
+COPY packages/gaitnet-mpc /tmp/gaitnet-mpc
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install /tmp/gaitnet-mpc && rm -rf /tmp/gaitnet-mpc
+
+# The pure-Python packages are editable: compose bind-mounts the checkout over
+# /workspace/gaitnet, so code changes apply without a rebuild. --no-deps because their
+# dependencies are all in the Isaac Lab venv, and our own package names must never resolve
+# from an index; --no-sources because the workspace root they point at isn't copied in.
+WORKDIR /workspace/gaitnet
+COPY packages/gaitnet-core packages/gaitnet-core
+COPY packages/gaitnet-sim packages/gaitnet-sim
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install --no-deps --no-sources -e packages/gaitnet-core -e packages/gaitnet-sim
+
+# Isaac Lab pre-creates its cache mount points for the runtime user; warp's cache is ours
+RUN mkdir -p /root/.cache/warp \
+ && chown -R isaaclab:isaaclab /root/.cache/warp /workspace/gaitnet
+
+USER isaaclab
+
+# isaaclab.sh -p runs the venv's Python with Isaac Sim's environment set up
+ENTRYPOINT ["/workspace/isaaclab/isaaclab.sh", "-p"]
+CMD ["-m", "gaitnet_sim.scripts.walk"]

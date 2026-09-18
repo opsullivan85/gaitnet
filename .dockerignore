@@ -1,0 +1,8 @@
+# Images only need packages/; the rest of the checkout arrives through compose's bind mount.
+*
+!packages/
+packages/**/build/
+packages/**/*.egg-info/
+packages/**/__pycache__/
+# extensions built on the host, for the host's Python
+packages/**/*.so

@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=70", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gaitnet-sim"
+version = "0.1.0"
+description = "GaitNet on Isaac Lab: environments, controller adapters, training and evaluation"
+requires-python = ">=3.12"
+# Isaac Lab itself (isaaclab, isaaclab_physx, isaaclab_rl, isaaclab_tasks) is not listed: it
+# comes from the Isaac Lab install in the sim image, see docker/Dockerfile.sim.
+dependencies = [
+    "gaitnet-core",
+    "gaitnet-mpc",
+    "rsl-rl-lib==5.5.1",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.uv.sources]
+gaitnet-core = { workspace = true }
+gaitnet-mpc = { workspace = true }

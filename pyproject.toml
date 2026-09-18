@@ -1,7 +1,7 @@
 # uv workspace root. The packages under packages/ are the project; the legacy gaitnet/
 # package at the root is being replaced by them (see the restructure plan).
 [tool.uv.workspace]
-members = ["packages/gaitnet-core", "packages/gaitnet-mpc"]
+members = ["packages/gaitnet-core", "packages/gaitnet-mpc", "packages/gaitnet-sim"]
 
 [tool.ruff]
 line-length = 100
