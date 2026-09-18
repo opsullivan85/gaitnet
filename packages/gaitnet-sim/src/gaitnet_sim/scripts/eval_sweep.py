@@ -1,6 +1,7 @@
 """Evaluate a policy bundle across terrain difficulties and commanded forward velocities.
 
     python -m gaitnet_sim.scripts.eval_sweep --bundle bundle.pt
+    python -m gaitnet_sim.scripts.eval_sweep --bundle bundle.pt --task GaitNet-Pillars
     python -m gaitnet_sim.scripts.eval_sweep --bundle bundle.pt --difficulties 0 0.2 --velocities 0.1 \\
         --envs_per_difficulty 8
 
@@ -20,6 +21,7 @@ from isaaclab.app import AppLauncher
 
 parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
 parser.add_argument("--bundle", required=True, help="Policy bundle file (gaitnet_sim.scripts.export_bundle).")
+parser.add_argument("--task", default="GaitNet-Holes", help="Task whose terrain type to sweep.")
 parser.add_argument(
     "--difficulties", type=float, nargs="+", default=[0.0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4]
 )
@@ -86,7 +88,7 @@ def main() -> int:
     bundle = load_bundle(args_cli.bundle, map_location=device)
     logger.info(f"bundle {args_cli.bundle}: {bundle.extra}")
 
-    env_cfg = parse_env_cfg("GaitNet-Holes", device=device, overrides=hydra_overrides)
+    env_cfg = parse_env_cfg(args_cli.task, device=device, overrides=hydra_overrides)
     if args_cli.episode_length_s is not None:
         env_cfg.episode_length_s = args_cli.episode_length_s
     make_eval_env_cfg(
@@ -105,7 +107,8 @@ def main() -> int:
     evaluator = Evaluator(env)
     command_term = env.command_manager.get_term("base_velocity")
 
-    out = Path(args_cli.out or f"data/evaluations/{Path(args_cli.bundle).stem}_{time.strftime('%Y%m%d-%H%M%S')}.csv")
+    stem = f"{Path(args_cli.bundle).stem}_{args_cli.task}_{time.strftime('%Y%m%d-%H%M%S')}"
+    out = Path(args_cli.out or f"data/evaluations/{stem}.csv")
     out.parent.mkdir(parents=True, exist_ok=True)
     with open(out, "w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=COLUMNS)

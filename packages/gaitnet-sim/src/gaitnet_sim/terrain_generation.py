@@ -14,7 +14,7 @@ from isaaclab.terrains import TerrainGenerator, TerrainImporter
 from isaaclab.terrains.height_field.utils import height_field_to_mesh
 
 if TYPE_CHECKING:
-    from gaitnet_sim.terrains import EvalTerrainGeneratorCfg, HfHolesTerrainCfg
+    from gaitnet_sim.terrains import EvalTerrainGeneratorCfg, HfHolesTerrainCfg, HfPillarsTerrainCfg
 
 
 @height_field_to_mesh
@@ -46,6 +46,36 @@ def hole_terrain(difficulty: float, cfg: "HfHolesTerrainCfg") -> np.ndarray:
     terrain = scipy.ndimage.zoom(terrain, scale, order=0)
     pad = ((0, output_size[0] - terrain.shape[0]), (0, output_size[1] - terrain.shape[1]))
     return np.pad(terrain, pad, mode="constant", constant_values=void)
+
+
+@height_field_to_mesh
+def pillar_terrain(difficulty: float, cfg: "HfPillarsTerrainCfg") -> np.ndarray:
+    """A grid of square pillars at random heights over a void, with a flat central platform.
+
+    Difficulty scales the gaps between pillars (to `cfg.max_gap`) and the spread of their
+    heights (to +-`cfg.max_height_offset`), so difficulty 0 is flat ground.
+
+    Returns:
+        (width, length) heights in units of `cfg.vertical_scale`.
+    """
+    pixels = (int(cfg.size[0] / cfg.horizontal_scale), int(cfg.size[1] / cfg.horizontal_scale))
+    width = max(1, round(cfg.pillar_width / cfg.horizontal_scale))
+    pitch = width + round(difficulty * cfg.max_gap / cfg.horizontal_scale)
+    max_offset = difficulty * cfg.max_height_offset / cfg.vertical_scale
+    terrain = np.full(pixels, cfg.hole_depth / cfg.vertical_scale)
+
+    # a random phase so pillar edges fall differently relative to the spawn on each
+    # sub-terrain; drawn from numpy's global state like the holes, see hole_terrain
+    phase = np.random.randint(0, pitch, size=2)
+    for x0 in range(phase[0] - pitch, pixels[0], pitch):
+        for y0 in range(phase[1] - pitch, pixels[1], pitch):
+            height = np.random.uniform(-max_offset, max_offset)
+            terrain[max(x0, 0) : max(x0 + width, 0), max(y0, 0) : max(y0 + width, 0)] = height
+
+    platform = int(cfg.platform_size / cfg.horizontal_scale)
+    start = ((pixels[0] - platform) // 2, (pixels[1] - platform) // 2)
+    terrain[start[0] : start[0] + platform, start[1] : start[1] + platform] = 0
+    return np.rint(terrain).astype(np.int16)
 
 
 class EvalTerrainGenerator(TerrainGenerator):

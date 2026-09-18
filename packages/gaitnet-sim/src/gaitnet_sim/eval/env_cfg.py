@@ -10,7 +10,7 @@ from isaaclab.managers import TerminationTermCfg as DoneTerm
 
 from gaitnet_core.bundle import BundleError, PolicyBundle
 from gaitnet_sim.env.commands import FixedVelocityCommandCfg
-from gaitnet_sim.env.env_cfg import GaitNetHolesEnvCfg
+from gaitnet_sim.env.env_cfg import GaitNetEnvCfg
 from gaitnet_sim.env.scene import SCANNER_NAMES, foothold_scanner_cfg
 from gaitnet_sim.env.terminations import out_of_sub_terrain
 from gaitnet_sim.robot import HIP_NAMES
@@ -32,7 +32,7 @@ def sub_terrain_length(velocities: list[float], episode_length_s: float) -> floa
     return max(_MIN_TERRAIN_LENGTH, 2.0 * reachable * _TERRAIN_LENGTH_MARGIN)
 
 
-def apply_bundle_contract(env_cfg: GaitNetHolesEnvCfg, bundle: PolicyBundle) -> None:
+def apply_bundle_contract(env_cfg: GaitNetEnvCfg, bundle: PolicyBundle) -> None:
     """Scan terrain on the bundle's foothold grid and use its foothold rules."""
     if bundle.robot.name != env_cfg.gaitnet.robot:
         raise BundleError(f"the policy is for {bundle.robot.name}, the scene has {env_cfg.gaitnet.robot}")
@@ -51,13 +51,13 @@ def apply_bundle_contract(env_cfg: GaitNetHolesEnvCfg, bundle: PolicyBundle) -> 
 
 
 def make_eval_env_cfg(
-    env_cfg: GaitNetHolesEnvCfg,
+    env_cfg: GaitNetEnvCfg,
     bundle: PolicyBundle,
     difficulties: list[float],
     velocities: list[float],
     envs_per_difficulty: int,
     terrain_length: float | None = None,
-) -> GaitNetHolesEnvCfg:
+) -> GaitNetEnvCfg:
     """Rewrite `env_cfg` (in place, and returned) for a sweep over `difficulties` x `velocities`."""
     apply_bundle_contract(env_cfg, bundle)
     num_envs = len(difficulties) * envs_per_difficulty

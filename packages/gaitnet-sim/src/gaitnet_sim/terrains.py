@@ -1,5 +1,5 @@
-"""Terrain cfgs: randomly holed ground for training, and an evaluation grid that holds a
-whole difficulty sweep in one scene. The implementations are in
+"""Terrain cfgs: randomly holed flat ground and pillars of varying height for training, and
+an evaluation grid that holds a whole difficulty sweep in one scene. The implementations are in
 `gaitnet_sim.terrain_generation`, referenced by name so these import without the simulator."""
 
 from __future__ import annotations
@@ -28,15 +28,34 @@ TERRAIN_MATERIAL = PhysxRigidBodyMaterialCfg(
 )
 
 
-def holes_terrain_cfg() -> TerrainImporterCfg:
+@configclass
+class HfPillarsTerrainCfg(HfTerrainBaseCfg):
+    """Square pillars at random heights; see `gaitnet_sim.terrain_generation.pillar_terrain`."""
+
+    function: str = "gaitnet_sim.terrain_generation:pillar_terrain"
+
+    pillar_width: float = 0.2
+    """Side of each pillar's top (m)."""
+    max_gap: float = 0.15
+    """Gap between neighbouring pillars at difficulty 1 (m); none at difficulty 0."""
+    max_height_offset: float = 0.1
+    """Pillar heights are uniform in +-(difficulty * this) (m)."""
+    hole_depth: float = -0.5
+    """Height of the void between pillars (m), negative."""
+    platform_size: float = 1.0
+    """Side of the flat square at the centre, where robots spawn (m)."""
+
+
+def _generated_terrain_cfg(name: str, sub_terrain: HfTerrainBaseCfg) -> TerrainImporterCfg:
     return TerrainImporterCfg(
         prim_path="/World/ground",
         terrain_type="generator",
         terrain_generator=TerrainGeneratorCfg(
             size=(4.0, 4.0),
             horizontal_scale=0.025,
+            # every height step becomes a vertical wall
             slope_threshold=0.0,
-            sub_terrains={"holes": HfHolesTerrainCfg()},
+            sub_terrains={name: sub_terrain},
             curriculum=True,
             num_rows=12,
             num_cols=12,
@@ -44,6 +63,14 @@ def holes_terrain_cfg() -> TerrainImporterCfg:
         ),
         physics_material=TERRAIN_MATERIAL,
     )
+
+
+def holes_terrain_cfg() -> TerrainImporterCfg:
+    return _generated_terrain_cfg("holes", HfHolesTerrainCfg())
+
+
+def pillars_terrain_cfg() -> TerrainImporterCfg:
+    return _generated_terrain_cfg("pillars", HfPillarsTerrainCfg())
 
 
 ##

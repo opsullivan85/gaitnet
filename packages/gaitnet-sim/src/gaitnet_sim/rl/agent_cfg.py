@@ -72,3 +72,8 @@ class GaitNetPpoRunnerCfg(RslRlOnPolicyRunnerCfg):
         max_grad_norm=1.0,
     )
     logger = WriterCfg(class_name="gaitnet_sim.rl.mlflow_writer.MlflowLogWriter", experiment_name="gaitnet")
+
+
+@configclass
+class GaitNetPillarsPpoRunnerCfg(GaitNetPpoRunnerCfg):
+    experiment_name = "gaitnet_pillars"

@@ -55,12 +55,14 @@ class PooledMpcController:
         active = footsteps.active.cpu().numpy()
         if not active.any():
             return
-        # the MPC places the foot on the stance plane, so it takes (x, y) only for now
+        # footholds are points on the terrain surface; the MPC places the foot's centre
+        location = footsteps.target.cpu().numpy().copy()
+        location[:, 2] += self.cfg.foot_radius
         self._pool.call(
             MpcFootstepController.initiate_footstep,
             mask=active,
             leg=footsteps.leg.cpu().numpy().astype(np.int32),
-            location_hip=footsteps.target[:, :2].cpu().numpy(),
+            location_hip=location,
             duration=footsteps.duration.cpu().numpy(),
         )
         self._gait_timing = None
@@ -108,6 +110,9 @@ class PooledMpcControllerCfg:
 
     iterations_between_mpc: int = 5
     """Physics steps per MPC solve; the leg PD and swing control run every step."""
+    foot_radius: float = 0.02
+    """Radius of the Go1's spherical foot (m). The MPC's foot point is the sphere's centre,
+    so a foothold on the surface is raised by this much."""
     num_workers: int | None = None
     """Worker processes, default one per CPU core."""
     shared_memory: bool = False
