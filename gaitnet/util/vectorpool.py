@@ -1,8 +1,12 @@
 from __future__ import annotations
 import inspect
+import socket
+import subprocess
+import sys
 import traceback
 from dataclasses import dataclass, field
-from multiprocessing import Pipe, Process, cpu_count, resource_tracker
+from pathlib import Path
+from multiprocessing import cpu_count, resource_tracker
 from multiprocessing.connection import Connection
 from multiprocessing.shared_memory import SharedMemory
 from typing import Any, Callable, Generic, Type, TypeVar
@@ -47,6 +51,10 @@ class VectorPool(Generic[T]):
 
     classes are distributed across worker processes to handle CPU-bound
     computations in parallel while maintaining state persistence across calls.
+
+    Workers are fresh interpreters rather than forks of this process (see
+    `_setup_workers`), so `cls`, its module, and the constructor kwargs must be
+    importable and picklable.
     """
 
     def __init__(
@@ -69,7 +77,7 @@ class VectorPool(Generic[T]):
         self.instances = instances
         self.num_workers = min(num_workers or cpu_count(), instances)
 
-        self.workers: list[Process] = []
+        self.workers: list[subprocess.Popen] = []
         self.pipes: list[Connection] = []
 
         # Setup workers
@@ -80,33 +88,54 @@ class VectorPool(Generic[T]):
         return np.array_split(data, self.num_workers)
 
     def _setup_workers(self, cls: Type[T], **kwargs) -> None:
-        """Setup worker processes and verify they initialized successfully."""
+        """Start worker processes and verify they initialized successfully.
+
+        Each worker is a fresh interpreter connected to this process by a private
+        socket pair. A fork would inherit every open file of this process, including
+        the CUDA/Kit handles and the manager end of each worker's pipe, so workers
+        never saw EOF and kept GPU memory alive after the manager died. Spawn and
+        forkserver avoid the inherited files, but re-run the manager's `__main__` in
+        every worker, which in our entry scripts launches Isaac Sim. A fresh
+        interpreter imports only the worker module, and exits once the manager's end
+        of its socket closes.
+        """
         object_assignments = self._batch_data(np.arange(self.instances))
         # figure out how many objects each worker has
         worker_objects = [assignment.shape[0] for assignment in object_assignments]
+        worker_script = Path(__file__).with_name("_vectorpool_worker.py")
 
-        for worker_id, num_objects in zip(range(self.num_workers), worker_objects):
-            parent_conn, child_conn = Pipe()
+        try:
+            for worker_id, num_objects in enumerate(worker_objects):
+                manager_socket, worker_socket = socket.socketpair()
+                try:
+                    worker = subprocess.Popen(
+                        [
+                            sys.executable,
+                            str(worker_script),
+                            str(worker_socket.fileno()),
+                            str(worker_id),
+                        ],
+                        pass_fds=(worker_socket.fileno(),),
+                        stdin=subprocess.DEVNULL,
+                    )
+                finally:
+                    worker_socket.close()
+                self.workers.append(worker)
+                pipe = Connection(manager_socket.detach())
+                self.pipes.append(pipe)
+                # the import path goes first, since the worker needs it to unpickle cls
+                pipe.send(sys.path)
+                pipe.send((type(self), cls, num_objects, kwargs))
 
-            worker = Process(
-                target=self._worker_loop,
-                args=(child_conn, worker_id, cls, num_objects, kwargs),
-            )
-            worker.start()
-
-            self.workers.append(worker)
-            self.pipes.append(parent_conn)
-
-        # Verify all workers started successfully
-        for pipe in self.pipes:
-            try:
+            # Verify all workers started successfully
+            for pipe in self.pipes:
                 pipe.send((Message.Manager.PING, None))
                 response_type, result = pipe.recv()
                 if response_type != Message.Worker.PONG:
                     raise RuntimeError(f"Worker failed to initialize: {result}")
-            except Exception as e:
-                self._cleanup()
-                raise RuntimeError(f"Failed to verify worker readiness: {e}")
+        except Exception as e:
+            self._cleanup()
+            raise RuntimeError(f"Failed to verify worker readiness: {e}") from e
 
     def _verify_workers_ready(self) -> None:
         """Verify all worker processes initialized successfully."""
@@ -143,7 +172,11 @@ class VectorPool(Generic[T]):
             while True:
                 try:
                     command, data = conn.recv()
+                except EOFError:
+                    # the manager exited without shutting the pool down
+                    break
 
+                try:
                     if command == Message.Manager.SHUTDOWN:
                         conn.send((Message.Worker.SUCCESS, None))
                         break
@@ -158,11 +191,16 @@ class VectorPool(Generic[T]):
                     logger.error(error_msg)
                     conn.send((Message.Worker.EXCEPTION, error_msg))
 
+        except (EOFError, BrokenPipeError, ConnectionResetError):
+            pass  # the manager is gone, nobody to report to
         except Exception as e:
             # Initialization failed
             error_msg = f"Worker {worker_id} initialization failed: {str(e)}\n{traceback.format_exc()}"
             logger.error(error_msg)
-            conn.send((Message.Worker.EXCEPTION, error_msg))
+            try:
+                conn.send((Message.Worker.EXCEPTION, error_msg))
+            except OSError:
+                pass
         finally:
             conn.close()
 
@@ -344,16 +382,20 @@ class VectorPool(Generic[T]):
                 logger.info(f"pipe {i} unresponsive during cleanup")
                 pass  # Worker may already be dead
 
-        # Terminate any remaining worker processes
+        # Reap the workers, terminating any that didn't exit after the shutdown message
         for i, worker in enumerate(self.workers, start=1):
-            if worker.is_alive():
+            try:
+                worker.wait(timeout=1.0)
+                continue
+            except subprocess.TimeoutExpired:
                 worker.terminate()
-                worker.join(timeout=0.1)
-                if worker.is_alive():
-                    worker.kill()  # Force kill if terminate didn't work
-                    logger.info(f"force killed worker {i}/{len(self.workers)}")
-                else:
-                    logger.debug(f"terminated worker {i}/{len(self.workers)}")
+            try:
+                worker.wait(timeout=0.5)
+                logger.debug(f"terminated worker {i}/{len(self.workers)}")
+            except subprocess.TimeoutExpired:
+                worker.kill()  # Force kill if terminate didn't work
+                worker.wait()
+                logger.info(f"force killed worker {i}/{len(self.workers)}")
 
         self.workers.clear()
         self.pipes.clear()

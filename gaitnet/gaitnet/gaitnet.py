@@ -507,24 +507,8 @@ class GaitnetActorCritic(ActorCritic):
                 option_std = torch.mean(per_leg_std)  # (1,)
                 self.episode_info["leg_option_std"] = option_std.item()
 
-                # Faster correlation approximation using dot product
-                costs = observations[:, const.gait_net.robot_state_dim :].view(
-                    logits.shape[0], -1, const.gait_net.footstep_option_dim
-                )[:, :, -1]  # (num_envs, num_options, footstep_option_dim)
-                # Use simple normalized dot product instead of full corrcoef
-                logits_flat = logits[op_mask].flatten()
-                costs_flat = -costs[op_mask].flatten()
-                # Normalize
-                logits_norm = logits_flat - logits_flat.mean()
-                costs_norm = costs_flat - costs_flat.mean()
-                logits_norm = logits_norm / (logits_norm.std(unbiased=False) + 1e-8)
-                costs_norm = costs_norm / (costs_norm.std(unbiased=False) + 1e-8)
-                correlation = (logits_norm * costs_norm).mean()
-                self.episode_info["logit_cost_correlation"] = correlation.item()
-
             else:
                 self.episode_info["leg_option_std"] = 0
-                self.episode_info["logit_cost_correlation"] = 0
 
             # Learned duration distribution std (the parameter itself, not the
             # empirical std of sampled durations logged in act()).

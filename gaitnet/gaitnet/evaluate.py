@@ -1,3 +1,7 @@
+from gaitnet import setup_logging
+
+setup_logging()
+
 from isaaclab.app import AppLauncher
 import argparse
 
@@ -26,6 +30,9 @@ parser.add_argument(
     default=None,
     help="Path to checkpoint to resume training from.",
 )
+from gaitnet.gaitnet.util import add_checkpoint_arg
+
+add_checkpoint_arg(parser)
 # append AppLauncher cli args
 AppLauncher.add_app_launcher_args(parser)
 # parse the arguments
@@ -101,7 +108,7 @@ def main():
     deterministic = False
     args_cli.num_envs = 1
     device = torch.device(args_cli.device)
-    model = load_model(get_checkpoint_path(), device, deterministic=deterministic)
+    model = load_model(get_checkpoint_path(args_cli.checkpoint_name), device, deterministic=deterministic)
     model.eval()
 
     env = get_env(

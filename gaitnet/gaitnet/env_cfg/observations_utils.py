@@ -36,7 +36,7 @@ robot_state_layout: dict[str, tuple[int, int]] = {
     "base_pos_z": (8, 9),
     "base_lin_vel": (9, 12),
     "base_ang_vel": (12, 15),
-    "control": (15, 18),  # everything up to here is the ContactNet input
+    "control": (15, 18),
     "contact_state_sensor": (18, 22),  # measured in sim
     "projected_gravity": (22, 25),
     "foot_position_z_b": (25, 29),
@@ -51,7 +51,6 @@ footstep_scanner_terms = ["FL_foot_scanner", "FR_foot_scanner", "RL_foot_scanner
 """Policy observation terms after the robot state. Their order is the leg order of the
 terrain channels, and so of the footstep options: FL, FR, RL, RR."""
 
-contactnet_obs_dim = robot_state_layout["control"][1]
 contact_state_indices = np.arange(*robot_state_layout["contact_state_sensor"])
 """Measured contact state. For whether the controller considers a leg in stance, use `scheduled_contact`."""
 _gait_timing_start = robot_state_layout["gait_timing_controller"][0]

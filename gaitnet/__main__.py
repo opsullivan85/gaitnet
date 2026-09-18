@@ -1,9 +1,10 @@
 from gaitnet.util import log_exceptions
-from gaitnet import get_logger
+from gaitnet import get_logger, setup_logging
 logger = get_logger()
 
 @log_exceptions(logger)
 def main():
+    setup_logging()
     print("Hello, World!")
 
 if __name__ == "__main__":

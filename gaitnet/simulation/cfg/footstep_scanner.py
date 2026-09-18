@@ -32,8 +32,8 @@ _height_scanner_settings = {
                 (const.footstep_scanner.sensor_grid_size[0] - 1) * const.footstep_scanner.grid_resolution,
                 (const.footstep_scanner.sensor_grid_size[1] - 1) * const.footstep_scanner.grid_resolution,
             ),
-            # importantly, this is the ordering that 
-            # contact-net expects (was used in training data generation)
+            # the flattened ray order that observations_utils.get_terrain_mask and
+            # footstep_scanner_constants.idx_to_xy assume
             ordering="yx",
         ),
         "debug_vis": True,

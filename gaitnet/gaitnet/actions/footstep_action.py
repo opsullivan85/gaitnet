@@ -1,6 +1,6 @@
 """Action for running footstep controller"""
 
-from typing import Sequence
+from typing import Sequence, TextIO
 from gaitnet.constants import NO_STEP
 from isaaclab.assets import Articulation
 from isaaclab.envs import ManagerBasedEnv
@@ -23,35 +23,16 @@ if TYPE_CHECKING:
 
 logger = get_logger()
 
-if (
-    const.experiments.contact_schedule_logging
-    or const.experiments.swing_duration_logging
-):
-    # try to grab "--difficulty" and "--velocity" from command line args
-    import argparse
+_log_files: dict[str, TextIO] = {}
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--difficulty", type=float, default=0.0)
-    parser.add_argument("--velocity", type=float, default=0.0)
-    args, unknown = parser.parse_known_args()
 
-    if const.experiments.contact_schedule_logging:
-        contact_schedule_log_folder = PROJECT_ROOT / "data" / "contact_schedule"
-        contact_schedule_log_folder.mkdir(parents=True, exist_ok=True)
-        contact_schedule_log_path = (
-            contact_schedule_log_folder
-            / f"contact_schedule_log_d{args.difficulty}_v{args.velocity}.csv"
-        )
-        contact_schedule_log = open(contact_schedule_log_path, "w")
-
-    if const.experiments.swing_duration_logging:
-        swing_duration_log_folder = PROJECT_ROOT / "data" / "swing_duration"
-        swing_duration_log_folder.mkdir(parents=True, exist_ok=True)
-        swing_duration_log_path = (
-            swing_duration_log_folder
-            / f"swing_duration_log_d{args.difficulty}_v{args.velocity}.csv"
-        )
-        swing_duration_log = open(swing_duration_log_path, "a")
+def _log_file(name: str) -> TextIO:
+    """Open (once) a csv under data/<name>/ for the experiment logging flags in `const.experiments`."""
+    if name not in _log_files:
+        folder = PROJECT_ROOT / "data" / name
+        folder.mkdir(parents=True, exist_ok=True)
+        _log_files[name] = open(folder / f"{name}_log.csv", "a")
+    return _log_files[name]
 
 
 class FSCActionTerm(ActionTerm):
@@ -142,20 +123,15 @@ class FSCActionTerm(ActionTerm):
         )
         all_options = (
             footstep_option_manager.footstep_options
-        )  # (num_envs, 17, 4) - last column is cost
+        )  # (num_envs, num_options, 3) - (leg, x, y)
 
-        # Use proper indexing to select the options (leg, x, y, cost)
         batch_size = action_indices.shape[0]
         batch_indices = torch.arange(batch_size, device=self.device)
+        selected_options = all_options[batch_indices, action_indices]  # (num_envs, 3)
 
-        # Gather the selected options (leg, x, y, cost)
-        selected_options = all_options[batch_indices, action_indices]  # (num_envs, 4)
-
-        # Replace the cost (column 3) with the duration from the policy.
         # Durations are intentionally not clipped to the valid range: clipping made
         # overlong swings free, so the policy pushed the mean duration to the cap.
-        selected_actions = selected_options.clone()
-        selected_actions[:, 3] = durations
+        selected_actions = torch.cat([selected_options, durations.unsqueeze(-1)], dim=-1)
 
         return selected_actions  # (num_envs, 4) - (leg, x, y, duration)
 
@@ -168,6 +144,7 @@ class FSCActionTerm(ActionTerm):
         """
         if const.experiments.contact_schedule_logging:
             action = processed_actions[0]
+            contact_schedule_log = _log_file("contact_schedule")
             contact_schedule_log.write(
                 f"{action[0]},{action[1]},{action[2]},{action[3]}\n"
             )
@@ -179,6 +156,7 @@ class FSCActionTerm(ActionTerm):
             valid_swing_durations = processed_actions[valid_swing_mask][:, 3]
             valid_swing_legs = processed_actions[valid_swing_mask][:, 0]
 
+            swing_duration_log = _log_file("swing_duration")
             swing_duration_log.writelines(
                 [f"{d},{l}\n" for l, d in zip(valid_swing_legs, valid_swing_durations)]
             )

@@ -1,12 +1,13 @@
 
 from gaitnet.util import log_exceptions
 
-from gaitnet import get_logger
+from gaitnet import get_logger, setup_logging
 logger = get_logger()
 
 
 @log_exceptions(logger)
 def main():
+    setup_logging()
     print("Hello, RobotInterface!")
     import numpy as np
 

@@ -7,7 +7,7 @@ small enough to score every cell, which removes the sampling variance and gives
 the policy's true argmax over the discretized foothold surface.
 
 The option set built here has the same contract as
-`FootstepCandidateSampler.get_footstep_options`: (leg, x, y, cost) tuples, leg-major,
+`FootstepCandidateSampler.get_footstep_options`: (leg, x, y) tuples, leg-major,
 with a trailing no-op, and with filtered-out cells carrying the no-op encoding. That
 means the scoring can go straight through `GaitnetActor.act_inference`, so the
 per-leg ``log(N_valid)`` normalization in `masked_option_logits` is applied exactly
@@ -42,19 +42,17 @@ def dense_footstep_options(obs: torch.Tensor) -> torch.Tensor:
             `FootstepCandidateSampler.get_footstep_options` expects.
 
     Returns:
-        (num_envs, num_legs * H * W + 1, 4) options as (leg, x, y, cost), leg-major
-        with the no-op last. Cost is always 0, matching the ablated sampler. Cells
-        rejected by the terrain / swing / minimum-contact filters carry the no-op
-        encoding so `masked_option_logits` masks them out.
+        (num_envs, num_legs * H * W + 1, 3) options as (leg, x, y), leg-major
+        with the no-op last. Cells rejected by the terrain / swing / minimum-contact
+        filters carry the no-op encoding so `masked_option_logits` masks them out.
     """
     num_envs = obs.shape[0]
     num_legs = const.robot.num_legs
     height, width = (int(n) for n in const.footstep_scanner.grid_size)
     device = obs.device
 
-    # 0 where the cell is a legal foothold, inf where it isn't
-    cost_map = FootstepCandidateSampler.filter_cost_map(None, obs)  # (N, 4, H, W)
-    invalid = torch.isinf(cost_map).reshape(num_envs, num_legs * height * width)
+    valid = FootstepCandidateSampler.valid_footholds(obs)  # (N, 4, H, W)
+    invalid = ~valid.reshape(num_envs, num_legs * height * width)
 
     # cell centers in the hip frame, identical for every env and leg
     grid_idx = torch.stack(
@@ -68,16 +66,15 @@ def dense_footstep_options(obs: torch.Tensor) -> torch.Tensor:
     grid_xy = idx_to_xy(grid_idx)  # (H, W, 2)
 
     legs = torch.arange(num_legs, device=device, dtype=grid_xy.dtype)
-    options = torch.empty((num_legs, height, width, 4), device=device, dtype=grid_xy.dtype)
+    options = torch.empty((num_legs, height, width, 3), device=device, dtype=grid_xy.dtype)
     options[..., 0] = legs.view(num_legs, 1, 1)
     options[..., 1:3] = grid_xy
-    options[..., 3] = 0.0  # cost is ablated everywhere else, keep it ablated here
-    options = options.reshape(1, num_legs * height * width, 4).repeat(num_envs, 1, 1)
+    options = options.reshape(1, num_legs * height * width, 3).repeat(num_envs, 1, 1)
 
     options[:, :, 0] = torch.where(invalid, float(NO_STEP), options[:, :, 0])
     options[:, :, 1:3] = torch.where(invalid.unsqueeze(-1), 0.0, options[:, :, 1:3])
 
-    no_op = torch.zeros((num_envs, 1, 4), device=device, dtype=options.dtype)
+    no_op = torch.zeros((num_envs, 1, 3), device=device, dtype=options.dtype)
     no_op[:, 0, 0] = NO_STEP
     return torch.cat([options, no_op], dim=1)
 
@@ -92,7 +89,7 @@ def options_to_policy_obs(
 
     Args:
         robot_state: (num_envs, robot_state_dim)
-        options: (num_envs, num_options, 4) as (leg, x, y, cost)
+        options: (num_envs, num_options, 3) as (leg, x, y)
 
     Returns:
         (num_envs, robot_state_dim + num_options * footstep_option_dim)
@@ -116,7 +113,7 @@ def dense_policy_obs(obs: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
             with the raw footstep scanner values still attached.
 
     Returns:
-        options: (num_envs, num_options, 4) as (leg, x, y, cost). Assign this to the
+        options: (num_envs, num_options, 3) as (leg, x, y). Assign this to the
             observation manager's `footstep_options` so the action term can resolve
             the index the policy picks.
         policy_obs: (num_envs, robot_state_dim + num_options * footstep_option_dim)
@@ -143,7 +140,7 @@ def dense_footstep_actions(
             (envs * options) under this, bounding peak activation memory.
 
     Returns:
-        options: (num_envs, num_options, 4) to assign to the observation manager's
+        options: (num_envs, num_options, 3) to assign to the observation manager's
             `footstep_options`, so the action term can resolve the chosen index.
         actions: (num_envs, 2) of (option index, duration), ready for `env.step`.
     """

@@ -48,7 +48,7 @@ class GaitNetEnv(ManagerBasedRLEnv):
             cfg=self.cfg.observations,
             env=self,
             footstep_option_generator=FootstepCandidateSampler(
-                env=self, options_per_leg=const.gait_net.num_footstep_options
+                options_per_leg=const.gait_net.num_footstep_options
             ),
             num_footstep_options=const.gait_net.num_footstep_options,
         )
