@@ -52,6 +52,7 @@ import rsl_rl.modules
 from gaitnet.gaitnet.env_cfg.gaitnet_env_cfg import get_env
 from gaitnet.util import log_exceptions
 from gaitnet.gaitnet import gaitnet
+from gaitnet_core.networks import CandidateScorer, Critic
 import gaitnet.constants as const
 from gaitnet import get_logger
 
@@ -85,18 +86,18 @@ def main():
     episode_info = {}
     env.episode_info = episode_info
 
-    gaitnet_actor = gaitnet.GaitnetActor(
-        shared_state_dim=const.gait_net.robot_state_dim,
-        shared_layer_sizes=[128, 128, 128],
-        unique_state_dim=const.gait_net.footstep_option_dim,
-        unique_layer_sizes=[64, 64],
-        trunk_layer_sizes=[128, 128, 128],
+    gaitnet_actor = CandidateScorer(
+        state_dim=const.gait_net.robot_state_dim,
+        num_legs=const.robot.num_legs,
+        candidate_features="xy",  # the current sim layer is 2D; candidate z is always 0
+        shared_sizes=[128, 128, 128],
+        candidate_sizes=[64, 64],
+        trunk_sizes=[128, 128, 128],
     ).to(args_cli.device)
 
-    gaitnet_critic = gaitnet.GaitnetCritic(
-        shared_state_dim=const.gait_net.robot_state_dim,
-        shared_layer_sizes=[64, 64, 64],
-        trunk_layer_sizes=[64, 64, 64],
+    gaitnet_critic = Critic(
+        state_dim=const.gait_net.robot_state_dim,
+        hidden_sizes=[64, 64, 64, 64, 64, 64],
     ).to(args_cli.device)
 
     actor_critic_class = gaitnet.GaitnetActorCritic

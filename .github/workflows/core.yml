@@ -1,0 +1,28 @@
+name: gaitnet-core
+
+on:
+  push:
+    paths: ["packages/gaitnet-core/**", ".github/workflows/core.yml"]
+  pull_request:
+    paths: ["packages/gaitnet-core/**", ".github/workflows/core.yml"]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+          python -m pip install -e "packages/gaitnet-core[test]" ruff
+      - name: Lint
+        run: ruff check --select E9,F packages/gaitnet-core
+      - name: Test
+        run: pytest -q packages/gaitnet-core/tests

@@ -69,9 +69,7 @@ from gaitnet.gaitnet.env_cfg.gaitnet_env_cfg import (
     update_controllers,
 )
 from gaitnet.util import log_exceptions
-from gaitnet.gaitnet import gaitnet
-import re
-from pathlib import Path
+from gaitnet_core.networks import CandidateScorer
 import gaitnet.constants as const
 from gaitnet.eval.components.eval_terrain import envs_for_difficulty, make_eval_terrain
 from gaitnet.eval.components.fixed_velocity_command import (
@@ -80,7 +78,7 @@ from gaitnet.eval.components.fixed_velocity_command import (
 )
 from gaitnet.eval.components.terminations import out_of_sub_terrain
 from gaitnet import GIT_COMMIT, get_logger
-from gaitnet.util.dense_sampling import dense_footstep_actions
+from gaitnet.gaitnet.dense_eval import dense_actions, load_actor
 
 logger = get_logger()
 
@@ -90,32 +88,6 @@ _minimum_terrain_length = 4.0
 # the collision mesh the old one-difficulty-per-process sweep cooked, and the largest
 # that is known to work here
 _triangle_budget = 6.4e6
-
-
-def load_model(checkpoint_path: Path, device: torch.device) -> gaitnet.GaitnetActor:
-    model = gaitnet.GaitnetActor(
-        shared_state_dim=const.gait_net.robot_state_dim,
-        shared_layer_sizes=[128, 128, 128],
-        unique_state_dim=const.gait_net.footstep_option_dim,
-        unique_layer_sizes=[64, 64],
-        trunk_layer_sizes=[128, 128, 128],
-        # training defaults, both off for evaluation: dense sampling compares
-        # thousands of nearby options, so bf16's ~3 significant digits is enough
-        # to perturb the argmax, and checkpointing only helps when backpropagating
-        checkpoint_chunk_size=None,
-        use_bf16=False,
-    )
-    agent = model
-    checkpoint = torch.load(checkpoint_path, map_location=device)
-    state_dict = checkpoint["model_state_dict"]
-    state_dict = {
-        re.sub(r"^actor\.", "", k): v
-        for k, v in state_dict.items()
-        if k.startswith("actor.")
-    }
-    agent.load_state_dict(state_dict)
-    agent.to(device)
-    return agent
 
 
 def sub_terrain_length(velocities: list[float], episode_length_s: float) -> float:
@@ -212,7 +184,7 @@ def eval_groups(difficulties: list[float], velocity: float, envs_per_difficulty:
 
 def run_velocity(
     env: GaitNetEnv,
-    model: gaitnet.GaitnetActor,
+    model: CandidateScorer,
     velocity: float,
     difficulties: list[float],
     envs_per_difficulty: int,
@@ -238,10 +210,10 @@ def run_velocity(
         )
 
         # score every cell of every leg rather than the sampler's random subset
-        options, actions = dense_footstep_actions(model, terrain_obs)
-        # the action term resolves the chosen index against the manager's option
-        # set, so it has to see the dense set, not the one the sampler generated
-        footstep_option_manager.footstep_options = options
+        candidates, actions = dense_actions(model, terrain_obs)
+        # the action term resolves the chosen index against the manager's candidates,
+        # so it has to see the dense set, not the one the sampler generated
+        footstep_option_manager.candidates = candidates
 
         env_step_info = env.step(actions)
         observations, rew, terminated, truncated, info = env_step_info
@@ -256,7 +228,7 @@ def run_velocity(
 
 def main():
     device = torch.device(args_cli.device)
-    model = load_model(get_checkpoint_path(args_cli.checkpoint_name), device)
+    model = load_actor(get_checkpoint_path(args_cli.checkpoint_name), device)
     model.eval()
 
     difficulties: list[float] = args_cli.difficulties

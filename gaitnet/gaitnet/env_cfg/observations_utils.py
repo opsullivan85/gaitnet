@@ -66,3 +66,23 @@ def scheduled_contact(obs: torch.Tensor) -> torch.Tensor:
     disagree with the measured contact state (e.g. early touchdown on rough terrain).
     """
     return obs[:, swing_time_remaining_indices] <= 0
+
+def gait_timing_from_obs(obs: torch.Tensor) -> torch.Tensor:
+    """(N, L, 3) scheduled gait timing, as `gaitnet_core.state.RobotState.gait_timing`,
+    from the feature grouped `gait_timing_controller` term."""
+    start, end = robot_state_layout["gait_timing_controller"]
+    return obs[:, start:end].reshape(obs.shape[0], 3, const.robot.num_legs).transpose(1, 2)
+
+
+def legacy_valid_footholds(obs: torch.Tensor) -> torch.Tensor:
+    """(N, L, H, W) valid footholds for the current sim layer.
+
+    The terrain rule is the old height band on the c-space dilated scan; the leg rules
+    (scheduled stance, legs left in stance) are gaitnet_core's. The new sim layer uses
+    gaitnet_core.terrain.valid_footholds on hip-relative heights instead.
+    """
+    from gaitnet_core.eligibility import step_eligible
+
+    terrain = get_terrain_mask(const.gait_net.valid_height_range, obs)
+    eligible = step_eligible(gait_timing_from_obs(obs))
+    return terrain & eligible.unsqueeze(-1).unsqueeze(-1)

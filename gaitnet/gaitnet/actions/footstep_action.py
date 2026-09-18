@@ -71,7 +71,7 @@ class FSCActionTerm(ActionTerm):
     def action_dim(self) -> int:
         """Dimension of the action term.
 
-        Returns 2: action index (0-16) and duration value.
+        Returns 2: flat candidate index (the no-op is num_legs * candidates_per_leg) and duration.
         """
         return 2  # Action index + duration
 
@@ -106,32 +106,27 @@ class FSCActionTerm(ActionTerm):
 
         Args:
             actions: The actions from the policy. (num_envs, 2) where:
-                     - Column 0: action index (0-16)
+                     - Column 0: flat candidate index, see gaitnet_core.candidates
                      - Column 1: duration value
 
         Returns:
             Footstep actions.
-            (num_envs, 4) where each action is (leg, x, y, duration)
+            (num_envs, 4) where each action is (leg, x, y, duration), leg NO_STEP for the no-op
         """
         # Extract action indices and durations
-        action_indices = actions[:, 0].long()  # (num_envs,)
+        action_indices = actions[:, 0].round().long()  # (num_envs,)
         durations = actions[:, 1]  # (num_envs,)
 
-        # Get the footstep options from the observation manager
-        footstep_option_manager: "GaitNetObservationManager" = (
-            self._get_option_manager()
-        )
-        all_options = (
-            footstep_option_manager.footstep_options
-        )  # (num_envs, num_options, 3) - (leg, x, y)
-
-        batch_size = action_indices.shape[0]
-        batch_indices = torch.arange(batch_size, device=self.device)
-        selected_options = all_options[batch_indices, action_indices]  # (num_envs, 3)
+        # the candidates the policy chose from, see GaitNetObservationManager
+        candidates = self._get_option_manager().candidates
+        is_step, leg, xyz = candidates.gather(action_indices)
+        leg = torch.where(is_step, leg, torch.full_like(leg, NO_STEP))
 
         # Durations are intentionally not clipped to the valid range: clipping made
         # overlong swings free, so the policy pushed the mean duration to the cap.
-        selected_actions = torch.cat([selected_options, durations.unsqueeze(-1)], dim=-1)
+        selected_actions = torch.cat(
+            [leg.float().unsqueeze(-1), xyz[:, :2], durations.unsqueeze(-1)], dim=-1
+        )
 
         return selected_actions  # (num_envs, 4) - (leg, x, y, duration)
 
@@ -170,7 +165,7 @@ class FSCActionTerm(ActionTerm):
 
         Args:
             actions: The actions from the policy (num_envs, 2) where:
-                     - Column 0: action index (0-16)
+                     - Column 0: flat candidate index
                      - Column 1: duration value
         """
         # Store raw actions

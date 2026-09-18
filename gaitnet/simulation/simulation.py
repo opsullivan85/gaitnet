@@ -30,7 +30,7 @@ import numpy as np
 import torch
 from isaaclab.terrains import TerrainGeneratorCfg
 
-from gaitnet.constants import NO_STEP
+import gaitnet.constants as const
 from gaitnet.gaitnet.components.gaitnet_env import GaitNetEnv
 from gaitnet.gaitnet.env_cfg.gaitnet_env_cfg import (
     GaitNetEnvCfg,
@@ -120,7 +120,7 @@ def main():
     This reuses the actual training env config (terrain, spawn/reset events,
     disturbances, random velocity commands, curriculum, ...) so that anything
     configured for training -- e.g. new disturbance events -- shows up here too.
-    The learned footstep policy is disabled (a constant NO_STEP action), so the
+    The learned footstep policy is disabled (a constant no-op action), so the
     robot is driven purely by the MPC's own gait scheduler tracking the
     randomly-sampled base_velocity command.
     """
@@ -135,10 +135,11 @@ def main():
     env = GaitNetEnv(cfg=env_cfg)
     update_controllers(env_cfg, args_cli.num_envs)
 
-    # no-op footstep action: leg=NO_STEP, duration=0. This lets the MPC's own gait
-    # scheduler drive the robot from the base_velocity command without any learned
-    # footstep placement.
-    no_op_action = torch.tensor([NO_STEP, 0.0], device=env.device).expand(
+    # no-op footstep action: the no-op candidate index, duration=0. This lets the MPC's
+    # own gait scheduler drive the robot from the base_velocity command without any
+    # learned footstep placement.
+    no_op_index = const.robot.num_legs * const.gait_net.num_footstep_options
+    no_op_action = torch.tensor([no_op_index, 0.0], device=env.device).expand(
         args_cli.num_envs, -1
     )
 
