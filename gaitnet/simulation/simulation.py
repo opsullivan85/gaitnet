@@ -38,7 +38,7 @@ from gaitnet.gaitnet.env_cfg.gaitnet_env_cfg import (
     update_controllers,
 )
 from gaitnet.sim2real.siminterface import SimInterface
-from gaitnet.util import VectorPool
+from gaitnet_mpc.pool import VectorPool
 
 from gaitnet import get_logger
 logger = get_logger()

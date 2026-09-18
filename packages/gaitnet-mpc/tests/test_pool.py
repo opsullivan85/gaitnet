@@ -1,14 +1,8 @@
-import sys
-from pathlib import Path
-
-module_path = Path(__file__).parent.parent
-sys.path.append(str(module_path))
-
 import os
 
 import numpy as np
 
-from gaitnet.util import SharedMemoryVectorPool, VectorPool
+from gaitnet_mpc.pool import SharedMemoryVectorPool, VectorPool
 
 # uneven split of objects across workers
 NUM_INSTANCES = 7

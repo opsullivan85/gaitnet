@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=70", "wheel", "pybind11>=2.12"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gaitnet-mpc"
+version = "0.1.0"
+description = "CPU convex MPC footstep controller (vendored rl-mpc-locomotion) and its process pool"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+dependencies = ["numpy", "scipy"]
+
+[project.optional-dependencies]
+test = ["pytest"]
+
+[tool.setuptools.packages.find]
+where = ["src"]

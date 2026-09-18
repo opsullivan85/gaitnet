@@ -10,7 +10,7 @@ import numpy as np
 import torch
 
 from gaitnet.sim2real.siminterface import Sim2RealInterface, SimInterface
-from gaitnet.util import VectorPool
+from gaitnet_mpc.pool import VectorPool
 from gaitnet.simulation.util import controls_to_joint_efforts
 from gaitnet import get_logger
 

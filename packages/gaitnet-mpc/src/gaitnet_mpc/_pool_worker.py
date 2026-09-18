@@ -1,11 +1,11 @@
-"""Entry point of a VectorPool worker process, see `VectorPool._setup_workers`.
+"""Entry point of a VectorPool worker process, see `gaitnet_mpc.pool.VectorPool._setup_workers`.
 
 Run as a script rather than with -m: the manager sends its sys.path first, and only
-then is anything from gaitnet imported. Passing the path through PYTHONPATH instead
+then is anything from gaitnet_mpc imported. Passing the path through PYTHONPATH instead
 could exceed the environment's size limit under Isaac Sim, whose sys.path holds
 hundreds of extension folders.
 
-usage: python _vectorpool_worker.py <socket fd> <worker id>
+usage: python _pool_worker.py <socket fd> <worker id>
 """
 
 import sys

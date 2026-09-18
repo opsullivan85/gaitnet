@@ -3,7 +3,7 @@ import torch
 
 from isaaclab.scene import InteractiveScene
 from gaitnet.sim2real.siminterface import SimInterface
-from gaitnet.util.vectorpool import VectorPool
+from gaitnet_mpc.pool import VectorPool
 
 
 def isaac_joints_to_interface(

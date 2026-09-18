@@ -15,8 +15,9 @@ import numpy as np
 
 import enum
 
-from gaitnet import get_logger
-logger = get_logger()
+import logging
+
+logger = logging.getLogger(__name__)
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
@@ -102,7 +103,7 @@ class VectorPool(Generic[T]):
         object_assignments = self._batch_data(np.arange(self.instances))
         # figure out how many objects each worker has
         worker_objects = [assignment.shape[0] for assignment in object_assignments]
-        worker_script = Path(__file__).with_name("_vectorpool_worker.py")
+        worker_script = Path(__file__).with_name("_pool_worker.py")
 
         try:
             for worker_id, num_objects in enumerate(worker_objects):

@@ -1,12 +1,6 @@
-import sys
-from pathlib import Path
-
-module_path = Path(__file__).parent.parent
-sys.path.append(str(module_path))
-
 import numpy as np
 
-from gaitnet.sim2real.siminterface import SimInterface
+from gaitnet_mpc import MpcFootstepController as SimInterface
 
 _control_joint_states = [
     ["FL_hip_pos", "FL_hip_vel"],

@@ -9,7 +9,7 @@ from isaaclab.utils import configclass
 import torch
 
 from gaitnet.sim2real.siminterface import Sim2RealInterface, SimInterface
-from gaitnet.util import VectorPool
+from gaitnet_mpc.pool import VectorPool
 import numpy as np
 import gaitnet.constants as const
 from gaitnet import get_logger, PROJECT_ROOT
