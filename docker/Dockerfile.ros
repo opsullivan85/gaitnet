@@ -1,0 +1,18 @@
+# syntax=docker/dockerfile:1
+# ROS 1 Noetic with rosbridge and gaitnet_msgs: the robot's side of the planner's contract,
+# with a fake robot (packages/gaitnet-ros1/ros/fake_robot.py) for testing the deployed planner.
+# A real robot builds gaitnet_msgs into its own catkin workspace instead. See
+# docker/ros_roundtrip.sh and packages/gaitnet-ros1/README.md.
+FROM ros:noetic-ros-base
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ros-noetic-rosbridge-server \
+ && rm -rf /var/lib/apt/lists/*
+
+COPY packages/gaitnet-ros1/ros/gaitnet_msgs /catkin_ws/src/gaitnet_msgs
+RUN . /opt/ros/noetic/setup.sh && cd /catkin_ws && catkin_make
+COPY packages/gaitnet-ros1/ros/fake_robot.py /catkin_ws/fake_robot.py
+
+# the workspace's setup also sources /opt/ros/noetic
+ENTRYPOINT ["/bin/bash", "-c", "source /catkin_ws/devel/setup.bash && exec \"$@\"", "--"]
+CMD ["roslaunch", "rosbridge_server", "rosbridge_websocket.launch"]

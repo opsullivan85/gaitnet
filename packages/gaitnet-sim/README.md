@@ -110,10 +110,30 @@ described.
 Then give it a preset: a field with the variant's name on the relevant `preset(...)` in
 `env/env_cfg.py` and `rl/agent_cfg.py`, and a line in the table above.
 
+## Sim2real hardening
+
+Training runs are hardened by default:
+
+- **Observation noise** (`env.actions.footstep.observation_noise`, see `env/noise.py`):
+  uniform noise on the planner's whole view of the robot, drawn once per planning step. It
+  covers foot positions and velocities, base velocities, gravity, and each leg's terrain
+  patch (a patch offset plus small per-cell noise). The state vector, the candidate
+  footholds and the terrain group therefore all see the same corrupted world, as on
+  hardware. Contact, gait timing and commands stay exact. Terminations, rewards and
+  privileged observations read the truth.
+- **Dynamics**: foot friction in 0.5 to 1.25 static and 0.4 to 1.0 dynamic, trunk mass −1 to
+  +2 kg (both per robot at startup), and velocity pushes of up to 0.2 m/s every 8 to 12 s.
+  The MPC keeps its nominal model throughout.
+
+`env.play_mode()` turns all of this off: nominal friction of 1.0, no added mass, no pushes,
+no noise. `eval_sweep` and `walk` use it unless given `--randomize`. To train without it,
+`env.actions.footstep.observation_noise=None env.events.push_robot=None ...` (or add a
+preset). Deploying a bundle on a robot is in [gaitnet-ros1](../gaitnet-ros1/README.md).
+
 ## Evaluation
 
 `gaitnet_sim.scripts.eval_sweep` runs a bundle through the deployment runtime
 (`PlannerRuntime` + `IsaacRobot`) across difficulties and velocities. Options for the
 experimental pieces: `--sampler` / `--per_leg` (the default is dense), `--refine` (gradient
-refinement of each footstep on the network's score, `--refine_steps`), `--stochastic`, and
-`--no_observers`.
+refinement of each footstep on the network's score, `--refine_steps`), `--stochastic`,
+`--no_observers`, and `--randomize` (training's randomization and noise instead of nominal).

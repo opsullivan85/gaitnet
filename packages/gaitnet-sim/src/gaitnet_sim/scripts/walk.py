@@ -6,7 +6,8 @@
 The policy's action is the no-op throughout; the diagonal trot is commanded straight to the
 controller, which the footstep interface allows (several footsteps per tick). Each foot goes
 to the valid foothold nearest its nominal spot, at the height the terrain scan reads there,
-so on pillars the controller has to place feet at different heights.
+so on pillars the controller has to place feet at different heights. Dynamics are nominal and
+observations exact (the env cfg's `play_mode`) unless `--randomize` is given.
 
 Fails if an observation goes non-finite, if the controller's view of the base orientation
 disagrees with the simulator's (the quaternion convention), if the terrain scan doesn't read
@@ -26,6 +27,9 @@ parser.add_argument("--difficulty", type=float, default=0.0, help="Terrain diffi
 parser.add_argument("--num_envs", type=int, default=4)
 parser.add_argument("--num_steps", type=int, default=1000)
 parser.add_argument("--spawn_yaw", type=float, default=0.7, help="Base yaw at reset (rad), for the orientation check.")
+parser.add_argument(
+    "--randomize", action="store_true", help="Keep training's friction, mass and push randomization and observation noise."
+)
 AppLauncher.add_app_launcher_args(parser)
 args_cli, hydra_overrides = parser.parse_known_args()
 simulation_app = AppLauncher(args_cli).app
@@ -166,6 +170,8 @@ def main() -> int:
     generator.curriculum = False
     env_cfg.curriculum.terrain_levels = None
     env_cfg.events.reset_base.params["pose_range"]["yaw"] = (args_cli.spawn_yaw, args_cli.spawn_yaw)
+    if not args_cli.randomize:
+        env_cfg.play_mode()
 
     env = ManagerBasedRLEnv(cfg=env_cfg)
     term: FootstepControlAction = env.action_manager.get_term("footstep")  # type: ignore[assignment]

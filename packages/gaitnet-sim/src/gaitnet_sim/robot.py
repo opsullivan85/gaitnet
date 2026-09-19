@@ -41,14 +41,17 @@ GO1_TORQUE_CFG.actuators = {
         damping=0.0,
     ),
 }
-# the USD's baked-in foot material has unknown (likely low) friction, which would undercut
-# the terrain's friction once combined; "max" makes the higher of the two win. Isaac Lab 3's
-# Go1 has instanced collision prims, which can't take a material binding until uninstanced.
+# Our own material replaces the USD's baked-in one (of unknown friction). Isaac Lab 3's Go1
+# has instanced collision prims, which can't take a material binding until uninstanced.
+# "multiply" against the terrain's friction of 1.0 makes the robot's friction the effective
+# one, so the env's friction randomization (which sets the robot's material) takes effect.
+# PhysX uses the higher-priority mode of the two materials (max > multiply > min > average),
+# so with "max" nothing below the terrain's 1.0 could ever be simulated.
 GO1_TORQUE_CFG.spawn.make_uninstanceable = True
 GO1_TORQUE_CFG.spawn.physics_material = PhysxRigidBodyMaterialCfg(
-    static_friction=1.5,
-    dynamic_friction=1.5,
-    friction_combine_mode="max",
+    static_friction=1.0,
+    dynamic_friction=1.0,
+    friction_combine_mode="multiply",
     restitution_combine_mode="min",
 )
 # the default of 4 converges the friction cone poorly, showing up as visible foot slip

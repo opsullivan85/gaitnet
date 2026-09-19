@@ -57,9 +57,17 @@ def make_eval_env_cfg(
     velocities: list[float],
     envs_per_difficulty: int,
     terrain_length: float | None = None,
+    randomize: bool = False,
 ) -> GaitNetEnvCfg:
-    """Rewrite `env_cfg` (in place, and returned) for a sweep over `difficulties` x `velocities`."""
+    """Rewrite `env_cfg` (in place, and returned) for a sweep over `difficulties` x `velocities`.
+
+    Args:
+        randomize: keep training's randomization and observation noise; by default the
+            sweep runs with nominal dynamics and exact observations (`play_mode`)
+    """
     apply_bundle_contract(env_cfg, bundle)
+    if not randomize:
+        env_cfg.play_mode()
     num_envs = len(difficulties) * envs_per_difficulty
     env_cfg.scene.num_envs = num_envs
     if terrain_length is None:

@@ -31,6 +31,7 @@ from gaitnet_sim.env import curriculum, observations, rewards, terminations
 from gaitnet_sim.env.actions_cfg import FootstepControlActionCfg
 from gaitnet_sim.env.contract import GaitNetCfg
 from gaitnet_sim.env.scene import GaitNetSceneCfg
+from gaitnet_sim.robot import BASE_NAME
 from gaitnet_sim.terrains import pillars_terrain_cfg
 
 
@@ -136,18 +137,44 @@ stance height (~0.26 m) matches the MPC's nominal height; nearer 0.5 left the le
 straight and every episode opened with the robot dropping ~13 cm."""
 
 
+NOMINAL_FRICTION = 1.0
+"""Effective foot-ground friction without randomization (the robot's material multiplies the
+terrain's 1.0, see gaitnet_sim.robot)."""
+
+
 @configclass
 class EventsCfg:
+    """Resets, plus the sim2real randomization: friction and trunk mass per robot at startup,
+    and pushes. `GaitNetEnvCfg.play_mode` turns the randomization off."""
+
     physics_material = EventTerm(
         func=mdp.randomize_rigid_body_material,
         mode="startup",
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names=".*"),
-            "static_friction_range": (1.0, 1.0),
-            "dynamic_friction_range": (0.9, 0.9),
+            "static_friction_range": (0.5, 1.25),
+            "dynamic_friction_range": (0.4, 1.0),
             "restitution_range": (0.0, 0.0),
             "num_buckets": 64,
+            # dynamic friction at most static
+            "make_consistent": True,
         },
+    )
+    add_base_mass = EventTerm(
+        func=mdp.randomize_rigid_body_mass,
+        mode="startup",
+        params={
+            "asset_cfg": SceneEntityCfg("robot", body_names=BASE_NAME),
+            # the Go1 is ~12 kg, its trunk ~5 kg; the MPC keeps its nominal model
+            "mass_distribution_params": (-1.0, 2.0),
+            "operation": "add",
+        },
+    )
+    push_robot = EventTerm(
+        func=mdp.push_by_setting_velocity,
+        mode="interval",
+        interval_range_s=(8.0, 12.0),
+        params={"velocity_range": {"x": (-0.2, 0.2), "y": (-0.2, 0.2)}},
     )
     reset_base = EventTerm(
         func=mdp.reset_root_state_uniform,
@@ -205,6 +232,17 @@ class GaitNetEnvCfg(ManagerBasedRLEnvCfg):
         generator = self.scene.terrain.terrain_generator
         if generator is not None:
             generator.curriculum = getattr(self.curriculum, "terrain_levels", None) is not None
+
+    def play_mode(self) -> None:
+        """Nominal dynamics and exact observations, for evaluation and smoke tests: nominal
+        friction, no added mass, no pushes, no observation noise. (Isaac Lab's play entry
+        points call this; our scripts call it themselves.)"""
+        friction = self.events.physics_material.params
+        friction["static_friction_range"] = (NOMINAL_FRICTION, NOMINAL_FRICTION)
+        friction["dynamic_friction_range"] = (NOMINAL_FRICTION, NOMINAL_FRICTION)
+        self.events.add_base_mass = None
+        self.events.push_robot = None
+        self.actions.footstep.observation_noise = None
 
 
 @configclass

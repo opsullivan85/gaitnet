@@ -8,8 +8,9 @@
 One scene holds every difficulty (one terrain row each), and velocities are swept in place,
 so there is one simulator boot, terrain cook and controller pool for the whole sweep. The
 policy runs through the same `PlannerRuntime` as on hardware, with dense candidates,
-deterministic selection and the bundle's feedback observers unless told otherwise;
-`--refine` adds gradient refinement of each footstep. Writes one CSV row per robot and trial:
+deterministic selection and the bundle's feedback observers, on nominal dynamics with exact
+observations, unless told otherwise; `--refine` adds gradient refinement of each footstep
+and `--randomize` keeps training's randomization. Writes one CSV row per robot and trial:
 difficulty, velocity, trial, env, distance (m walked along +x before the robot's first
 episode ended), steps, truncated, terminated_by.
 
@@ -37,6 +38,9 @@ parser.add_argument("--stochastic", action="store_true", help="Sample footsteps 
 parser.add_argument("--refine", action="store_true", help="Refine each footstep by gradient ascent on the network's score.")
 parser.add_argument("--refine_steps", type=int, default=4, help="Ascent steps per footstep, with --refine.")
 parser.add_argument("--no_observers", action="store_true", help="Leave out the feedback observers the bundle was trained with.")
+parser.add_argument(
+    "--randomize", action="store_true", help="Keep training's friction, mass and push randomization and observation noise."
+)
 parser.add_argument("--out", default=None, help="CSV path; data/evaluations/<bundle>_<time>.csv by default.")
 AppLauncher.add_app_launcher_args(parser)
 args_cli, hydra_overrides = parser.parse_known_args()
@@ -103,6 +107,7 @@ def main() -> int:
         velocities=args_cli.velocities,
         envs_per_difficulty=args_cli.envs_per_difficulty,
         terrain_length=args_cli.terrain_length,
+        randomize=args_cli.randomize,
     )
     env = ManagerBasedRLEnv(cfg=env_cfg)
     robot = IsaacRobot(env)

@@ -7,6 +7,9 @@ them on, `terrain` (per-leg height patches, for networks that read them), `privi
 (sim-only inputs for the critic) and `base_command` (the command before any nudge, for
 feedback observers). Candidates are an observation so the RL library stores them with the
 step and can recompute log-probabilities on exactly the set the action was drawn from.
+
+The policy's groups read the action term's `planner_observation()`, which carries the
+observation noise; privileged terms read the truth.
 """
 
 from __future__ import annotations
@@ -36,7 +39,7 @@ def footstep_action(env: "ManagerBasedRLEnv", name: str = "footstep") -> "Footst
 
 def robot_state(env: "ManagerBasedRLEnv", features: list[str], action_name: str = "footstep") -> torch.Tensor:
     """(N, D) the named `gaitnet_core.features`, concatenated in order."""
-    return state_vector(footstep_action(env, action_name).robot_state(), features)
+    return state_vector(footstep_action(env, action_name).planner_observation().state, features)
 
 
 def terrain_heights(env: "ManagerBasedRLEnv", action_name: str = "footstep") -> torch.Tensor:
@@ -45,7 +48,7 @@ def terrain_heights(env: "ManagerBasedRLEnv", action_name: str = "footstep") -> 
     Unknown cells (no ray returned) read `gaitnet_core.terrain.UNKNOWN_HEIGHT` rather than
     -inf, as the networks that read terrain see them at deployment too.
     """
-    return fill_unknown(footstep_action(env, action_name).terrain().heights)
+    return fill_unknown(footstep_action(env, action_name).planner_observation().terrain.heights)
 
 
 def footstep_candidates(
@@ -60,7 +63,7 @@ def footstep_candidates(
     sampled, so the policy never scores a foothold it isn't allowed to take.
     """
     term = footstep_action(env, action_name)
-    observation = term.observation()
+    observation = term.planner_observation()
     valid = env.cfg.gaitnet.foothold_rules().valid(observation, term.spec)
     heights = inner_heights(observation.terrain.heights, term.grid)
     candidates = make_sampler(sampler, **(sampler_kwargs or {})).sample(valid, term.grid, heights=heights)
