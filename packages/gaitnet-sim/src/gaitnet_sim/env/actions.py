@@ -97,7 +97,7 @@ class FootstepControlAction(ActionTerm):
         return self.base_command() + self._nudge
 
     def robot_state(self) -> RobotState:
-        return self.io.robot_state(self.controller.gait_timing(), self.effective_command())
+        return self.io.robot_state(self.controller.gait_timing(), self.effective_command(), self.base_command())
 
     def terrain(self) -> TerrainPatch:
         return self.io.terrain()

@@ -21,6 +21,7 @@ def make_state(n: int, num_legs: int = 4) -> RobotState:
         contact=torch.ones(n, num_legs, dtype=torch.bool),
         gait_timing=torch.zeros(n, num_legs, 3),
         command=torch.zeros(n, 3),
+        base_command=torch.zeros(n, 3),
     )
 
 

@@ -79,11 +79,12 @@ class RobotIO:
         """(N, 6) base linear then angular velocity, world frame."""
         return self.robot.data.root_link_vel_w.torch
 
-    def robot_state(self, gait_timing: torch.Tensor, command: torch.Tensor) -> RobotState:
+    def robot_state(self, gait_timing: torch.Tensor, command: torch.Tensor, base_command: torch.Tensor) -> RobotState:
         """
         Args:
             gait_timing: (N, L, 3) the controller's schedule
             command: (N, 3) the velocity command the controller is tracking
+            base_command: (N, 3) the command before any nudge
         """
         data = self.robot.data
         base_pos = data.root_link_pos_w.torch
@@ -113,6 +114,7 @@ class RobotIO:
             contact=forces.norm(dim=-1) > self.contact_threshold,
             gait_timing=gait_timing,
             command=command,
+            base_command=base_command,
         )
 
     def foot_heights(self) -> torch.Tensor:

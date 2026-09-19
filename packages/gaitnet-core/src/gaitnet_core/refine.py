@@ -10,14 +10,17 @@ GPU instead of a per-robot scipy distance transform.
 
 from __future__ import annotations
 
-from dataclasses import replace
+from dataclasses import fields, is_dataclass, replace
 
 import torch
+import torch.nn as nn
 
 from gaitnet_core.candidates import Candidates
+from gaitnet_core.features import state_vector
 from gaitnet_core.grid import FootholdGrid
-from gaitnet_core.networks.candidate_scorer import CandidateScorer
-from gaitnet_core.planner import PlanResult
+from gaitnet_core.planner import FootstepPlanner, PlanResult
+from gaitnet_core.state import Observation
+from gaitnet_core.terrain import inner_heights
 
 
 def _lookup(cells_valid: torch.Tensor, heights: torch.Tensor | None, grid: FootholdGrid, rows, leg, xy):
@@ -31,7 +34,7 @@ def _lookup(cells_valid: torch.Tensor, heights: torch.Tensor | None, grid: Footh
 
 
 def refine_plan(
-    network: CandidateScorer,
+    network: nn.Module,
     state: torch.Tensor,
     plan: PlanResult,
     valid: torch.Tensor,
@@ -40,13 +43,16 @@ def refine_plan(
     starts: int = 4,
     steps: int = 4,
     step_length: float | None = None,
+    terrain: torch.Tensor | None = None,
 ) -> PlanResult:
     """Move each stepping robot's foothold uphill in the network's score.
 
     Args:
+        network: the scoring network the plan came from
         state: (N, state_dim) the state vector the plan was scored with
         valid: (N, L, *grid.size) valid footholds the plan was sampled from
         heights: (N, L, *grid.size) cell heights for the refined foothold's z
+        terrain: (N, L, *grid.patch_size) the terrain patches, for networks that read them
         starts: best candidates of the chosen leg to start ascent from
         steps: ascent steps, each of `step_length` along the normalized gradient
         step_length: (m), default a quarter cell. A step onto an invalid cell is rejected.
@@ -76,7 +82,7 @@ def refine_plan(
         xyz[rows, leg] = torch.cat([points, z.unsqueeze(-1)], dim=-1)
         mask[rows, leg] = True
         cands = Candidates(xyz=xyz, valid=mask, log_q=torch.zeros_like(xyz[..., 0]))
-        scores = network(state, cands)
+        scores = network(state, cands, terrain)
         return scores.step_logits[rows, leg], scores.duration[rows, leg], ok, z
 
     with torch.enable_grad():
@@ -105,3 +111,44 @@ def refine_plan(
     target = torch.where(plan.is_step.unsqueeze(-1), new_target, plan.target)
     duration = torch.where(plan.is_step, best_duration[rows, pick], plan.selection.duration)
     return replace(plan, target=target, selection=replace(plan.selection, duration=duration))
+
+
+def _copy_tensors(obj):
+    """`obj` with every tensor in it (through nested dataclasses) cloned."""
+    if isinstance(obj, torch.Tensor):
+        return obj.clone()
+    if is_dataclass(obj) and not isinstance(obj, type):
+        return replace(obj, **{f.name: _copy_tensors(getattr(obj, f.name)) for f in fields(obj)})
+    return obj
+
+
+class Refiner:
+    """`refine_plan` as a `PlannerRuntime` postprocess, for the planner's own network."""
+
+    def __init__(self, planner: FootstepPlanner, starts: int = 4, steps: int = 4, step_length: float | None = None):
+        self.planner = planner
+        self.starts = starts
+        self.steps = steps
+        self.step_length = step_length
+
+    def __call__(self, plan: PlanResult, observation: Observation) -> PlanResult:
+        planner = self.planner
+        # ascent needs autograd, which torch.inference_mode (evaluation loops) turns off;
+        # tensors made under it can't be saved for backward either, hence the copies
+        with torch.inference_mode(False):
+            plan, observation = _copy_tensors(plan), _copy_tensors(observation)
+            state = state_vector(observation.state, planner.features)
+            valid = planner.rules.valid(observation, planner.spec)
+            terrain = observation.terrain.heights
+            return refine_plan(
+                planner.network,
+                state,
+                plan,
+                valid,
+                planner.grid,
+                heights=inner_heights(terrain, planner.grid),
+                starts=self.starts,
+                steps=self.steps,
+                step_length=self.step_length,
+                terrain=terrain,
+            )

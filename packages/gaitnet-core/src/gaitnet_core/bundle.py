@@ -2,15 +2,16 @@
 
 A bundle holds the actor's weights together with everything needed to use them: the
 network's class and constructor arguments, the robot, the foothold grid and rules, the
-state features in order, and the sampler it was trained with. Loading checks the
-manifest against this code, so a policy can't silently run with a different state layout
-or grid than it was trained on. Training logs bundles as run artifacts; deployment loads
-one from a local file.
+state features in order, the sampler it was trained with, and the feedback observers it
+was trained under (the policy saw their nudges, so it should run with them). Loading
+checks the manifest against this code, so a policy can't silently run with a different
+state layout or grid than it was trained on. Training logs bundles as run artifacts;
+deployment loads one from a local file.
 """
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 import torch
@@ -19,11 +20,12 @@ import torch.nn as nn
 from gaitnet_core.features import FEATURES, feature_dim
 from gaitnet_core.grid import FootholdGrid
 from gaitnet_core.networks import NETWORKS, build_network
+from gaitnet_core.observers import OBSERVERS, Observer, make_observers
 from gaitnet_core.planner import FootholdRules, FootstepPlanner
 from gaitnet_core.robot_spec import ROBOTS, RobotSpec
 from gaitnet_core.samplers import CandidateSampler, make_sampler
 
-FORMAT_VERSION = 1
+FORMAT_VERSION = 2
 
 
 class BundleError(ValueError):
@@ -42,6 +44,11 @@ class PolicyBundle:
     duration_std: float
     extra: dict
     """Free-form metadata: git commit, controller, run id, ..."""
+    observers: dict[str, dict] = field(default_factory=dict)
+    """{name: kwargs}, see `gaitnet_core.observers.make_observers`"""
+
+    def make_observers(self) -> list[Observer]:
+        return make_observers(self.observers)
 
     def planner(self, sampler: CandidateSampler | None = None) -> FootstepPlanner:
         """A planner for this policy. Defaults to exhaustive (dense) sampling."""
@@ -68,6 +75,7 @@ def _manifest(bundle: PolicyBundle) -> dict:
         "rules": asdict(bundle.rules),
         "train_sampler": dict(bundle.train_sampler),
         "duration_std": float(bundle.duration_std),
+        "observers": {name: dict(kwargs or {}) for name, kwargs in bundle.observers.items()},
         "extra": dict(bundle.extra),
     }
 
@@ -95,6 +103,13 @@ def check_manifest(manifest: dict) -> None:
     state_dim = manifest["actor"]["config"].get("state_dim")
     if state_dim is not None and state_dim != expected:
         raise BundleError(f"network expects a {state_dim} dim state, the features give {expected}")
+    # networks that read terrain were built for one foothold grid
+    network_grid = manifest["actor"]["config"].get("grid")
+    if network_grid is not None and FootholdGrid.from_dict(network_grid) != FootholdGrid.from_dict(manifest["grid"]):
+        raise BundleError(f"network reads terrain on grid {network_grid}, the bundle's grid is {manifest['grid']}")
+    unknown = [name for name in manifest["observers"] if name not in OBSERVERS]
+    if unknown:
+        raise BundleError(f"unknown observers {unknown}")
 
 
 def load_bundle(path: str | Path, map_location: str | torch.device = "cpu") -> PolicyBundle:
@@ -113,4 +128,5 @@ def load_bundle(path: str | Path, map_location: str | torch.device = "cpu") -> P
         train_sampler=manifest["train_sampler"],
         duration_std=manifest["duration_std"],
         extra=manifest["extra"],
+        observers=manifest["observers"],
     )

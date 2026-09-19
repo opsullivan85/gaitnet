@@ -62,3 +62,43 @@ def inner_heights(heights: torch.Tensor, grid: FootholdGrid) -> torch.Tensor:
     """Crop a (…, *patch_size) terrain patch to the (…, *size) candidate grid."""
     b = grid.border
     return heights[..., b : b + grid.size[0], b : b + grid.size[1]]
+
+
+UNKNOWN_HEIGHT = -1.0
+"""What networks read where the terrain height is unknown (-inf): far below any foothold,
+so it reads as a drop."""
+
+
+def fill_unknown(heights: torch.Tensor, value: float = UNKNOWN_HEIGHT) -> torch.Tensor:
+    """`heights` with unknown (non-finite) entries set to `value`, for networks to read."""
+    return torch.where(torch.isfinite(heights), heights, torch.full_like(heights, value))
+
+
+def sample_patch(maps: torch.Tensor, xy: torch.Tensor, grid: FootholdGrid) -> torch.Tensor:
+    """Bilinear interpolation of per-leg maps over the grid's cells, differentiable in `xy`.
+
+    Args:
+        maps: (N, L, C, X, Y) values at the centres of an X x Y block of cells centred on the
+            hip at `grid.resolution`: the terrain patch, the candidate grid, or a size between
+        xy: (N, L, K, 2) points in each leg's hip yaw frame (m). Points beyond the outermost
+            cell centres take the value at the map's edge.
+
+    Returns:
+        (N, L, K, C), in `xy`'s dtype
+    """
+    n, l, c, size_x, size_y = maps.shape
+    if (size_x - grid.size[0]) % 2 or (size_y - grid.size[1]) % 2:
+        raise ValueError(f"maps of {(size_x, size_y)} cells can't be centred like the {grid.size} grid")
+    k = xy.shape[2]
+    # grid_sample's coordinates run from -1 to 1 between the first and last cell centres
+    # (align_corners=True), and its first coordinate indexes the last dimension (our y)
+    half = torch.tensor([size_x - 1, size_y - 1], device=xy.device, dtype=xy.dtype) * (grid.resolution / 2)
+    normalized = (xy / half).flip(-1).reshape(n * l, k, 1, 2)
+    sampled = F.grid_sample(
+        maps.reshape(n * l, c, size_x, size_y).to(xy.dtype),
+        normalized,
+        mode="bilinear",
+        padding_mode="border",
+        align_corners=True,
+    )
+    return sampled.reshape(n, l, c, k).transpose(-1, -2)
