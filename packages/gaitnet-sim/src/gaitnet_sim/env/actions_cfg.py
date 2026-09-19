@@ -7,6 +7,7 @@ from isaaclab.utils import configclass
 
 from gaitnet_sim import robot as go1
 from gaitnet_sim.controllers import PooledMpcControllerCfg
+from gaitnet_sim.env.noise import ObservationNoiseCfg
 from gaitnet_sim.env.scene import SCANNER_NAMES
 
 
@@ -22,6 +23,8 @@ class FootstepControlActionCfg(ActionTermCfg):
     apply_nudge: bool = True
     """Add the action's nudge to the command. The nudge is zero unless a feedback observer
     produced one."""
+    observation_noise: ObservationNoiseCfg | None = ObservationNoiseCfg()
+    """Noise on the planner's view of the robot (`planner_observation`), None for the truth."""
 
     joint_names: tuple[str, ...] = go1.JOINT_NAMES
     foot_names: tuple[str, ...] = go1.FOOT_NAMES

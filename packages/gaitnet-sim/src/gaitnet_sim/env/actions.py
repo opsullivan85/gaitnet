@@ -24,6 +24,7 @@ from gaitnet_core import action_layout
 from gaitnet_core.action_layout import EnvAction
 from gaitnet_core.interfaces import FootstepCommand, LowLevelController
 from gaitnet_core.state import Observation, RobotState, TerrainPatch
+from gaitnet_sim.env.noise import corrupt
 from gaitnet_sim.robot_io import RobotIO
 
 if TYPE_CHECKING:
@@ -59,6 +60,7 @@ class FootstepControlAction(ActionTerm):
         self._raw_actions = torch.zeros(self.num_envs, action_layout.DIM, device=self.device)
         self._nudge = torch.zeros(self.num_envs, 3, device=self.device)
         self._footsteps = FootstepCommand.none(self.num_envs, device=self.device)
+        self._planner_observation: Observation | None = None
 
     def __del__(self):
         controller = getattr(self, "controller", None)
@@ -103,9 +105,22 @@ class FootstepControlAction(ActionTerm):
         return self.io.terrain()
 
     def observation(self) -> Observation:
+        """The truth: what terminations, rewards and privileged observations read."""
         return Observation(self.robot_state(), self.terrain())
 
+    def planner_observation(self) -> Observation:
+        """What the planner sees: the truth with `cfg.observation_noise` added, if any. One draw
+        per env step, so every observation group sees the same corrupted world."""
+        if self._planner_observation is None:
+            observation = self.observation()
+            if self.cfg.observation_noise is not None:
+                observation = corrupt(observation, self.cfg.observation_noise)
+            self._planner_observation = observation
+        return self._planner_observation
+
     def process_actions(self, actions: torch.Tensor):
+        # the robots are about to move
+        self._planner_observation = None
         # copied into the buffers made at init: tensors made here under torch.inference_mode
         # (RSL-RL, evaluation) would refuse the in-place updates of a later reset outside it
         self._raw_actions[:] = actions
@@ -135,3 +150,4 @@ class FootstepControlAction(ActionTerm):
         self._nudge[ids] = 0.0
         self._footsteps.active[ids] = False
         self.controller.reset(ids)
+        self._planner_observation = None

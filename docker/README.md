@@ -23,6 +23,14 @@ docker/build_isaaclab.sh
 docker compose -f docker/compose.yaml build sim
 ```
 
+Two small images serve deployment (profile `ros`, so `up` leaves them alone):
+
+- `gaitnet/deploy:dev` (service `deploy`, `Dockerfile.deploy`): the planner for a real robot,
+  gaitnet-core and gaitnet-ros1 on CPU torch, with no ROS or Isaac. It mounts `data/bundles` at
+  `/bundles`.
+- `gaitnet/ros:noetic` (service `ros`, `Dockerfile.ros`): ROS Noetic with rosbridge,
+  gaitnet_msgs and a fake robot, standing in for the robot when testing the planner.
+
 To move to a newer Isaac Lab, change `ISAACLAB_COMMIT` in `build_isaaclab.sh` and
 `ISAACLAB_IMAGE` in `Dockerfile.sim`.
 
@@ -33,7 +41,7 @@ directory is the checkout, bind-mounted at `/workspace/gaitnet`:
 
 ```bash
 # scripted walk, the sim smoke test (flat ground; --task GaitNet-Pillars --difficulty 0.3
-# for pillars)
+# for pillars; --randomize to keep training's randomization and observation noise)
 docker compose -f docker/compose.yaml run --rm sim -m gaitnet_sim.scripts.walk --num_envs 4
 
 # train (tasks GaitNet-Holes and GaitNet-Pillars; Isaac Lab's train entry point, so
@@ -53,8 +61,14 @@ docker compose -f docker/compose.yaml run --rm sim -m gaitnet_sim.scripts.eval_s
 # tests for the MPC need the compiled extension
 docker compose -f docker/compose.yaml run --rm sim -m pytest packages/gaitnet-mpc/tests
 
-# tests (core and the sim package's simulator-free ones)
-docker compose -f docker/compose.yaml run --rm sim -m pytest packages/gaitnet-core/tests packages/gaitnet-sim/tests
+# tests (core, gaitnet-ros1 and the sim package's simulator-free ones)
+docker compose -f docker/compose.yaml run --rm sim -m pytest packages/gaitnet-core/tests packages/gaitnet-sim/tests packages/gaitnet-ros1/tests
+
+# a bundle on a real robot, over its rosbridge server (packages/gaitnet-ros1/README.md)
+docker compose -f docker/compose.yaml run --rm deploy --bundle /bundles/policy.pt --host <robot>
+
+# the same planner against a fake robot, end to end, with latency
+docker/ros_roundtrip.sh data/bundles/policy.pt
 
 # a shell
 docker compose -f docker/compose.yaml run --rm --entrypoint bash sim

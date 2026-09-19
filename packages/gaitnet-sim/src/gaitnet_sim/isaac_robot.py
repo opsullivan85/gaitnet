@@ -36,7 +36,8 @@ class IsaacRobot:
         return self.env.num_envs
 
     def observe(self) -> Observation:
-        return self.term.observation()
+        """What a policy would see in training: with the env's observation noise, if any."""
+        return self.term.planner_observation()
 
     def command(self, footsteps: FootstepCommand | Sequence[FootstepCommand], nudge: Nudge | None = None) -> None:
         if isinstance(footsteps, FootstepCommand):
