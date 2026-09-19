@@ -2,9 +2,10 @@
 
 A run directory, as Isaac Lab's train entry point writes it, has `params/env.yaml`,
 `params/agent.yaml` and RSL-RL checkpoints `model_<iteration>.pt`. The bundle takes the
-scoring network and its learned duration noise from a checkpoint, and the robot, foothold
-grid and rules, state features and training sampler from the env cfg. MLflow runs hold the
-same files as artifacts (see `MlflowLogWriter`) and are downloaded into that layout first.
+scoring network and its learned duration noise from a checkpoint, the feedback observers
+from the agent cfg, and the robot, foothold grid and rules, state features and training
+sampler from the env cfg. MLflow runs hold the same files as artifacts (see
+`MlflowLogWriter`) and are downloaded into that layout first.
 """
 
 from __future__ import annotations
@@ -18,6 +19,7 @@ import yaml
 
 from gaitnet_core.bundle import BundleError, PolicyBundle
 from gaitnet_core.features import feature_dim
+from gaitnet_core.grid import FootholdGrid
 from gaitnet_core.networks import build_network
 from gaitnet_sim.env.contract import GaitNetCfg
 
@@ -82,9 +84,12 @@ def bundle_from_run(run_dir: str | Path, checkpoint: str | None = None, extra: d
     candidates = env["observations"]["candidates"]["candidates"]["params"]
     train_sampler = {"name": candidates["sampler"], **(candidates.get("sampler_kwargs") or {})}
 
+    grid = contract.foothold_grid()
     network_cfg = dict(agent["actor"]["network"])
     network_class = network_cfg.pop("class_name")
     network_cfg.setdefault("state_dim", feature_dim(features, spec.num_legs))
+    if network_cfg.get("grid") is not None and FootholdGrid.from_dict(network_cfg["grid"]) != grid:
+        raise BundleError(f"the network read terrain on grid {network_cfg['grid']}, the env scanned {grid}")
     network = build_network(network_class, network_cfg)
 
     saved = torch.load(run_dir / checkpoint, map_location="cpu", weights_only=False)
@@ -96,7 +101,7 @@ def bundle_from_run(run_dir: str | Path, checkpoint: str | None = None, extra: d
     return PolicyBundle(
         actor=network.eval(),
         robot=spec,
-        grid=contract.foothold_grid(),
+        grid=grid,
         features=features,
         rules=contract.foothold_rules(),
         train_sampler=train_sampler,
@@ -108,6 +113,7 @@ def bundle_from_run(run_dir: str | Path, checkpoint: str | None = None, extra: d
             "controller": str(controller),
             **(extra or {}),
         },
+        observers={name: dict(kwargs or {}) for name, kwargs in (agent["actor"].get("observers") or {}).items()},
     )
 
 

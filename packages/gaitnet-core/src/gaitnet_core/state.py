@@ -40,6 +40,9 @@ class RobotState:
     command: torch.Tensor
     """(N, 3) velocity command the controller is tracking (vx, vy, yaw rate), base frame.
     When a feedback observer nudges the command, this is the nudged value."""
+    base_command: torch.Tensor
+    """(N, 3) the operator's velocity command before any nudge, base frame. Observers
+    compute their nudges from it; the policy's features use `command`."""
 
     @property
     def num_robots(self) -> int:

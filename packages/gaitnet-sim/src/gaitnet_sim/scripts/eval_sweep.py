@@ -1,14 +1,15 @@
 """Evaluate a policy bundle across terrain difficulties and commanded forward velocities.
 
     python -m gaitnet_sim.scripts.eval_sweep --bundle bundle.pt
-    python -m gaitnet_sim.scripts.eval_sweep --bundle bundle.pt --task GaitNet-Pillars
+    python -m gaitnet_sim.scripts.eval_sweep --bundle bundle.pt --task GaitNet-Pillars --refine
     python -m gaitnet_sim.scripts.eval_sweep --bundle bundle.pt --difficulties 0 0.2 --velocities 0.1 \\
         --envs_per_difficulty 8
 
 One scene holds every difficulty (one terrain row each), and velocities are swept in place,
 so there is one simulator boot, terrain cook and controller pool for the whole sweep. The
-policy runs through the same `PlannerRuntime` as on hardware, with dense candidates and
-deterministic selection unless told otherwise. Writes one CSV row per robot and trial:
+policy runs through the same `PlannerRuntime` as on hardware, with dense candidates,
+deterministic selection and the bundle's feedback observers unless told otherwise;
+`--refine` adds gradient refinement of each footstep. Writes one CSV row per robot and trial:
 difficulty, velocity, trial, env, distance (m walked along +x before the robot's first
 episode ended), steps, truncated, terminated_by.
 
@@ -33,6 +34,9 @@ parser.add_argument("--episode_length_s", type=float, default=None, help="Episod
 parser.add_argument("--sampler", default="dense", help="Candidate sampler (gaitnet_core.samplers.SAMPLERS).")
 parser.add_argument("--per_leg", type=int, default=None, help="Candidates per leg, for the sampling samplers.")
 parser.add_argument("--stochastic", action="store_true", help="Sample footsteps instead of the deterministic choice.")
+parser.add_argument("--refine", action="store_true", help="Refine each footstep by gradient ascent on the network's score.")
+parser.add_argument("--refine_steps", type=int, default=4, help="Ascent steps per footstep, with --refine.")
+parser.add_argument("--no_observers", action="store_true", help="Leave out the feedback observers the bundle was trained with.")
 parser.add_argument("--out", default=None, help="CSV path; data/evaluations/<bundle>_<time>.csv by default.")
 AppLauncher.add_app_launcher_args(parser)
 args_cli, hydra_overrides = parser.parse_known_args()
@@ -51,6 +55,7 @@ from isaaclab.envs import ManagerBasedRLEnv  # noqa: E402
 from isaaclab_tasks.utils import parse_env_cfg  # noqa: E402
 
 from gaitnet_core.bundle import load_bundle  # noqa: E402
+from gaitnet_core.refine import Refiner  # noqa: E402
 from gaitnet_core.runtime import PlannerRuntime  # noqa: E402
 from gaitnet_core.samplers import make_sampler  # noqa: E402
 from gaitnet_sim.eval.env_cfg import make_eval_env_cfg  # noqa: E402
@@ -103,7 +108,15 @@ def main() -> int:
     robot = IsaacRobot(env)
     sampler_kwargs = {"per_leg": args_cli.per_leg} if args_cli.per_leg is not None else {}
     planner = bundle.planner(make_sampler(args_cli.sampler, **sampler_kwargs))
-    runtime = PlannerRuntime(robot, planner, deterministic=not args_cli.stochastic)
+    observers = [] if args_cli.no_observers else bundle.make_observers()
+    logger.info(f"observers: {bundle.observers if observers else 'none'}; refine: {args_cli.refine}")
+    runtime = PlannerRuntime(
+        robot,
+        planner,
+        observers=observers,
+        deterministic=not args_cli.stochastic,
+        postprocess=Refiner(planner, steps=args_cli.refine_steps) if args_cli.refine else None,
+    )
     evaluator = Evaluator(env)
     command_term = env.command_manager.get_term("base_velocity")
 
@@ -117,6 +130,7 @@ def main() -> int:
             command_term.set_command((velocity, 0.0, 0.0))
             for trial in range(args_cli.trials):
                 env.reset()
+                runtime.reset()
                 evaluator.start()
                 start, ticks = time.monotonic(), 0
                 with torch.inference_mode():

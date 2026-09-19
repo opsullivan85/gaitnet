@@ -6,9 +6,12 @@ import logging
 import time
 from typing import Callable, Sequence
 
+import torch
+
 from gaitnet_core.interfaces import RobotInterface
 from gaitnet_core.observers import Observer, combined_nudge
 from gaitnet_core.planner import FootstepPlanner, PlanResult
+from gaitnet_core.state import Observation
 
 logger = logging.getLogger(__name__)
 
@@ -21,12 +24,13 @@ class PlannerRuntime:
         observers: Sequence[Observer] = (),
         rate_hz: float = 25.0,
         deterministic: bool = True,
-        postprocess: Callable[[PlanResult], PlanResult] | None = None,
+        postprocess: Callable[[PlanResult, Observation], PlanResult] | None = None,
     ):
         """
         Args:
-            postprocess: applied to each plan before the observers see it, e.g. continuous
-                refinement (`gaitnet_core.refine.refine_plan`)
+            postprocess: applied to each plan (with the observation it was planned from)
+                before the observers see it, e.g. continuous refinement
+                (`gaitnet_core.refine.Refiner`)
         """
         self.robot = robot
         self.planner = planner
@@ -41,10 +45,15 @@ class PlannerRuntime:
         observation = self.robot.observe().to(next(self.planner.network.parameters()).device)
         plan = self.planner.plan(observation, deterministic=self.deterministic)
         if self.postprocess is not None:
-            plan = self.postprocess(plan)
-        nudge = combined_nudge(self.observers, plan, observation)
+            plan = self.postprocess(plan, observation)
+        nudge = combined_nudge(self.observers, plan, observation.state.base_command)
         self.robot.command(plan.footstep_command(), nudge)
         return plan
+
+    def reset(self, robot_ids: torch.Tensor | None = None) -> None:
+        """Clear the observers' per-robot memory, for robots starting over."""
+        for observer in self.observers:
+            observer.reset(robot_ids)
 
     def run(self, max_ticks: int | None = None, should_stop: Callable[[], bool] = lambda: False) -> int:
         """Tick at the configured rate until `max_ticks` or `should_stop()`. Returns ticks run."""

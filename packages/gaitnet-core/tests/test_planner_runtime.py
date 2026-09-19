@@ -54,15 +54,17 @@ class _Slowdown:
     def reset(self, robot_ids=None):
         self.calls = 0
 
-    def observe(self, plan, observation):
+    def observe(self, plan, base_command):
         self.calls += 1
-        return Nudge(-0.5 * observation.state.command)
+        return Nudge(-0.5 * base_command)
 
 
 def test_runtime_with_replay_robot_and_observer():
     observations = [make_observation(1) for _ in range(3)]
     for obs in observations:
-        obs.state.command[:] = torch.tensor([0.2, 0.0, 0.0])
+        obs.state.base_command[:] = torch.tensor([0.2, 0.0, 0.0])
+        # what the robot tracks after last tick's nudge; observers work from the base command
+        obs.state.command[:] = torch.tensor([0.1, 0.0, 0.0])
     robot = ReplayRobot(observations)
     observer = _Slowdown()
     runtime = PlannerRuntime(robot, _planner(Dense()), observers=[observer], rate_hz=1000)
