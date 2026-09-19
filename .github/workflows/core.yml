@@ -1,10 +1,10 @@
-name: gaitnet-core
+name: gaitnet-core and gaitnet-ros1
 
 on:
   push:
-    paths: ["packages/gaitnet-core/**", ".github/workflows/core.yml"]
+    paths: ["packages/gaitnet-core/**", "packages/gaitnet-ros1/**", ".github/workflows/core.yml"]
   pull_request:
-    paths: ["packages/gaitnet-core/**", ".github/workflows/core.yml"]
+    paths: ["packages/gaitnet-core/**", "packages/gaitnet-ros1/**", ".github/workflows/core.yml"]
 
 jobs:
   test:
@@ -21,8 +21,8 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
-          python -m pip install -e "packages/gaitnet-core[test]" ruff
+          python -m pip install -e "packages/gaitnet-core[test]" -e "packages/gaitnet-ros1[test]" ruff
       - name: Lint
-        run: ruff check --select E9,F packages/gaitnet-core
+        run: ruff check --select E9,F packages/gaitnet-core packages/gaitnet-ros1/src packages/gaitnet-ros1/tests
       - name: Test
-        run: pytest -q packages/gaitnet-core/tests
+        run: pytest -q packages/gaitnet-core/tests packages/gaitnet-ros1/tests

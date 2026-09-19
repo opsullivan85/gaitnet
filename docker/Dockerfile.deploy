@@ -1,0 +1,24 @@
+# syntax=docker/dockerfile:1
+# The planner for a real robot, on the x86 machine next to it: gaitnet-core and gaitnet-ros1
+# on CPU torch, talking to the robot's rosbridge server. No ROS, no Isaac. Bundles come from a
+# mounted directory (compose mounts data/bundles at /bundles):
+#
+#   docker compose -f docker/compose.yaml run --rm deploy --bundle /bundles/policy.pt --host <robot>
+#
+# See packages/gaitnet-ros1/README.md. For a GPU planner, build with
+# --build-arg TORCH_INDEX=https://download.pytorch.org/whl/cu128 and run with --device cuda.
+FROM python:3.12-slim
+
+ARG TORCH_INDEX=https://download.pytorch.org/whl/cpu
+# the training image's torch minor version, so bundles load the same
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install "torch==2.11.*" --index-url ${TORCH_INDEX}
+
+COPY packages/gaitnet-core /src/gaitnet-core
+COPY packages/gaitnet-ros1 /src/gaitnet-ros1
+# both at once, so gaitnet-ros1's gaitnet-core requirement is the local one
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install /src/gaitnet-core /src/gaitnet-ros1
+
+WORKDIR /workspace
+ENTRYPOINT ["python", "-m", "gaitnet_ros1.run"]

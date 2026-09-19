@@ -1,7 +1,7 @@
 # uv workspace root; the project is the packages under packages/. The simulator runs in
 # Docker, see docker/README.md.
 [tool.uv.workspace]
-members = ["packages/gaitnet-core", "packages/gaitnet-mpc", "packages/gaitnet-sim"]
+members = ["packages/gaitnet-core", "packages/gaitnet-mpc", "packages/gaitnet-sim", "packages/gaitnet-ros1"]
 
 [tool.ruff]
 line-length = 100

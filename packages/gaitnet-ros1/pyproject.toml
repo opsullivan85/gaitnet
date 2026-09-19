@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=70", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gaitnet-ros1"
+version = "0.1.0"
+description = "GaitNet on a real robot: RobotInterface over ROS 1 (rosbridge), and the deployment runner"
+requires-python = ">=3.11"
+dependencies = ["gaitnet-core", "roslibpy>=1.7"]
+
+[project.optional-dependencies]
+test = ["pytest"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.uv.sources]
+gaitnet-core = { workspace = true }

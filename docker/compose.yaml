@@ -66,6 +66,29 @@ services:
       - ov-logs:/root/.nvidia-omniverse/logs
       - ov-data:/root/.local/share/ov/data
 
+  # The deployed planner (no ROS, no Isaac): runs a bundle from data/bundles against a
+  # robot's rosbridge server. Profile "ros", so plain `up` leaves it alone.
+  deploy:
+    image: gaitnet/deploy:dev
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.deploy
+    profiles: [ros]
+    volumes:
+      - type: bind
+        source: ../data/bundles
+        target: /bundles
+        read_only: true
+
+  # A stand-in for the robot: ROS Noetic, rosbridge and gaitnet_msgs, with a fake robot to run
+  # against the planner (docker/ros_roundtrip.sh).
+  ros:
+    image: gaitnet/ros:noetic
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.ros
+    profiles: [ros]
+
 volumes:
   mlflow-data:
   kit-cache:

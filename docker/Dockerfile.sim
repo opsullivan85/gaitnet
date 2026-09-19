@@ -24,11 +24,13 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # /workspace/gaitnet, so code changes apply without a rebuild. --no-deps because their
 # dependencies are all in the Isaac Lab venv, and our own package names must never resolve
 # from an index; --no-sources because the workspace root they point at isn't copied in.
+# gaitnet-ros1 is here only for its tests, which don't need roslibpy.
 WORKDIR /workspace/gaitnet
 COPY packages/gaitnet-core packages/gaitnet-core
 COPY packages/gaitnet-sim packages/gaitnet-sim
+COPY packages/gaitnet-ros1 packages/gaitnet-ros1
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv pip install --no-deps --no-sources -e packages/gaitnet-core -e packages/gaitnet-sim
+    uv pip install --no-deps --no-sources -e packages/gaitnet-core -e packages/gaitnet-sim -e packages/gaitnet-ros1
 
 # Isaac Lab pre-creates its cache mount points for the runtime user; warp's cache is ours
 RUN mkdir -p /root/.cache/warp \
