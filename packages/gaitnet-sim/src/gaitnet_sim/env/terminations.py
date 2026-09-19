@@ -8,26 +8,18 @@ import torch
 
 from isaaclab.managers import SceneEntityCfg
 
-from gaitnet_sim.env.observations import footstep_action
+from gaitnet_sim.env.observations import base_terrain_clearance, footstep_action
 
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedRLEnv
-    from isaaclab.sensors import RayCaster
 
 
 def base_below_terrain_clearance(
     env: "ManagerBasedRLEnv", minimum_height: float, sensor_cfg: SceneEntityCfg = SceneEntityCfg("base_scanner")
 ) -> torch.Tensor:
-    """The base came within `minimum_height` of the highest surface under the trunk.
-
-    `sensor_cfg` is a ray caster on the base, yaw aligned, whose pattern covers the trunk's
-    footprint. On flat ground this is the base's height above the ground.
-    """
-    scanner: RayCaster = env.scene.sensors[sensor_cfg.name]
-    hits = scanner.data.ray_hits_w.torch[..., 2]
-    hits = torch.where(torch.isfinite(hits), hits, torch.full_like(hits, float("-inf")))
-    clearance = scanner.data.pos_w.torch[:, 2] - hits.amax(dim=1)
-    return clearance < minimum_height
+    """The base came within `minimum_height` of the highest surface under the trunk, see
+    `observations.base_terrain_clearance`."""
+    return base_terrain_clearance(env, sensor_cfg).squeeze(-1) < minimum_height
 
 
 def feet_below_walkable_terrain(

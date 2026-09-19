@@ -23,7 +23,7 @@ N, K = 3, 8
 NETWORK = {"class_name": "CandidateScorer", "shared_sizes": [16, 16], "candidate_sizes": [8, 8], "trunk_sizes": [16, 16]}
 
 
-def write_run(tmp_path, actor: GaitNetActor, actor_groups=("state",)):
+def write_run(tmp_path, actor: GaitNetActor, actor_groups=("state",), network=NETWORK, observers=None):
     env = {
         # tuples as yaml.dump writes them, like Isaac Lab's dump_yaml
         "gaitnet": {"robot": "go1", "grid_resolution": 0.02, "grid_size": (21, 21), "grid_border": 3,
@@ -36,7 +36,10 @@ def write_run(tmp_path, actor: GaitNetActor, actor_groups=("state",)):
         # other Python types Isaac Lab's dump tags, e.g. SceneEntityCfg's body_ids
         "rewards": {"foot_slip": {"params": {"asset_cfg": {"body_ids": slice(None)}}}},
     }
-    agent = {"obs_groups": {"actor": list(actor_groups), "critic": ["state"]}, "actor": {"network": dict(NETWORK)}}
+    agent = {
+        "obs_groups": {"actor": list(actor_groups), "critic": ["state"]},
+        "actor": {"network": dict(network), "observers": dict(observers or {})},
+    }
     (tmp_path / "params").mkdir()
     (tmp_path / "params" / "env.yaml").write_text(yaml.dump(env))
     (tmp_path / "params" / "agent.yaml").write_text(yaml.dump(agent))
@@ -71,6 +74,24 @@ def test_bundle_scores_like_the_actor(tmp_path):
     assert torch.equal(expected.step_logits, got.step_logits)
     assert torch.equal(expected.noop_logit, got.noop_logit)
     assert torch.equal(expected.duration, got.duration)
+
+
+def test_bundle_carries_the_observers(tmp_path):
+    actor, _ = make_actor()
+    observers = {"step_confidence_slowdown": {"patience": 7}}
+    write_run(tmp_path, actor, observers=observers)
+    bundle = bundle_from_run(tmp_path)
+    assert bundle.observers == observers
+    assert load_bundle(save_bundle(tmp_path / "bundle.pt", bundle)).make_observers()[0].patience == 7
+
+
+def test_rejects_a_terrain_network_built_for_another_grid(tmp_path):
+    actor, _ = make_actor()
+    # the run's env scanned 0.02 m cells
+    grid = {"resolution": 0.015, "size": [21, 21], "border": 3}
+    write_run(tmp_path, actor, network={"class_name": "DenseSpatialCNN", "grid": grid})
+    with pytest.raises(BundleError, match="grid"):
+        bundle_from_run(tmp_path)
 
 
 def test_rejects_actor_reading_other_groups(tmp_path):

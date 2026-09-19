@@ -1,9 +1,11 @@
 """GaitNet's manager-based environment configs.
 
 A stock `ManagerBasedRLEnv` runs these; nothing is subclassed. Experiments change them
-with configclass subclasses or Hydra overrides, e.g.
-`env.observations.state.robot_state.params.features=[...]` for the state vector or
-`env.observations.candidates.candidates.params.sampler=dense` for the sampler.
+with Isaac Lab presets (`presets=spatial,privileged`, which switch on the observation
+groups those variants read, together with the agent cfg's matching parts) or overrides,
+e.g. `"env.observations.state.robot_state.params.features=['foot_pos','command']"` for the
+state vector or `env.observations.candidates.candidates.params.sampler=dense` for the
+sampler. See packages/gaitnet-sim/README.md.
 """
 
 from __future__ import annotations
@@ -22,6 +24,7 @@ from isaaclab.managers import TerminationTermCfg as DoneTerm
 from isaaclab.sensors import SensorBaseCfg
 from isaaclab.utils import configclass
 from isaaclab_physx.physics import PhysxCfg
+from isaaclab_tasks.utils import preset
 
 from gaitnet_core.features import DEFAULT_FEATURES
 from gaitnet_sim.env import curriculum, observations, rewards, terminations
@@ -48,12 +51,31 @@ class ObservationsCfg:
             params={"sampler": "uniform_jitter", "sampler_kwargs": {"per_leg": 64}},
         )
 
+    @configclass
+    class PrivilegedCfg(ObsGroup):
+        """Sim-only inputs for a privileged critic: the terrain ahead of every leg, coarsely,
+        the base's clearance and the contact forces."""
+
+        terrain_heights = ObsTerm(func=observations.terrain_height_summary, params={"cells": 5})
+        foothold_validity = ObsTerm(func=observations.foothold_validity_summary, params={"cells": 5})
+        base_clearance = ObsTerm(func=observations.base_terrain_clearance)
+        contact_forces = ObsTerm(func=observations.foot_contact_forces)
+
+    @configclass
+    class BaseCommandCfg(ObsGroup):
+        base_command = ObsTerm(func=observations.base_command)
+
     state: StateCfg = StateCfg()
-    # Off by default: RSL-RL keeps every group in its rollout buffer, and terrain patches cost
-    # ~4 GB at 1024 envs x 250 steps. Variants whose networks read terrain set
-    # `observations.terrain = ObservationsCfg.TerrainCfg()`.
-    terrain: TerrainCfg | None = None
     candidates: CandidatesCfg = CandidatesCfg()
+
+    # Optional groups, off unless a preset needs them: RSL-RL keeps every group in its
+    # rollout buffer, and terrain patches alone cost ~4 GB at 1024 envs x 250 steps.
+    terrain = preset(default=None, spatial=TerrainCfg(), crop=TerrainCfg())
+    """For actors whose networks read terrain (the dense spatial CNN, the crop encoder)."""
+    privileged = preset(default=None, privileged=PrivilegedCfg())
+    """For the privileged critic."""
+    base_command = preset(default=None, slowdown=BaseCommandCfg())
+    """For feedback observers running in the actor during training."""
 
 
 @configclass

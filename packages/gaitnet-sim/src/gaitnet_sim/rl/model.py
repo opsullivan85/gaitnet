@@ -7,8 +7,9 @@ distribution (`gaitnet_core.selection.FootstepDistribution`), which needs the ca
 from the observation and so can't be one of RSL-RL's output distributions.
 
 Actions follow `gaitnet_core.action_layout`: the choice (candidate index, duration) that
-log-probabilities are computed from, and the footstep it resolves to, which the environment
-executes. The nudge fields are zero; feedback observers add theirs outside the policy.
+log-probabilities are computed from, the footstep it resolves to, which the environment
+executes, and the nudge of any feedback observers (zero without them). Observers are part
+of the environment's dynamics, not the policy: log-probabilities ignore the nudge.
 """
 
 from __future__ import annotations
@@ -22,7 +23,9 @@ from tensordict import TensorDict
 from gaitnet_core import action_layout
 from gaitnet_core.action_layout import NO_STEP_LEG, EnvAction
 from gaitnet_core.candidates import Candidates
-from gaitnet_core.networks import build_network
+from gaitnet_core.networks import build_network, uses_terrain
+from gaitnet_core.observers import combined_nudge, make_observers
+from gaitnet_core.planner import plan_from_scores
 from gaitnet_core.selection import FootstepDistribution, Selection
 
 
@@ -37,7 +40,9 @@ class GaitNetActor(nn.Module):
         output_dim: int,
         network: dict,
         candidates_group: str = "candidates",
-        terrain_group: str | None = None,
+        terrain_group: str = "terrain",
+        observers: dict[str, dict] | None = None,
+        base_command_group: str = "base_command",
         duration_std: float = 0.05,
         distribution_cfg: dict | None = None,
     ):
@@ -48,7 +53,12 @@ class GaitNetActor(nn.Module):
             network: `{"class_name": <key of gaitnet_core.networks.NETWORKS>, **kwargs}`.
                 `state_dim` is taken from the observations if not given.
             candidates_group: the group holding packed candidates, (N, L, K, 5)
-            terrain_group: the group holding terrain patches, for networks that use them
+            terrain_group: the group holding terrain patches, (N, L, *patch_size), read only
+                by networks that use terrain
+            observers: feedback observers to run while acting,
+                `{<key of gaitnet_core.observers.OBSERVERS>: kwargs}`
+            base_command_group: the group holding the command before any nudge, (N, 3),
+                which observers need
             duration_std: initial swing duration noise (s), then learned
             distribution_cfg: must be None. Isaac Lab's runner cfg gives every model this key;
                 this model's distribution is fixed by the candidates.
@@ -70,7 +80,29 @@ class GaitNetActor(nn.Module):
             raise ValueError(f"network state_dim {config['state_dim']} != {state_dim} from groups {self.state_groups}")
         self.network = build_network(self.network_class, config)
         self.candidates_group = candidates_group
-        self.terrain_group = terrain_group
+
+        self.terrain_group = terrain_group if uses_terrain(self.network) else None
+        if self.terrain_group is not None:
+            if self.terrain_group not in obs.keys():
+                raise ValueError(
+                    f"{self.network_class} reads terrain, but there is no '{terrain_group}' observation group;"
+                    " select the preset that turns it on, e.g. presets=spatial"
+                )
+            patch_size = tuple(obs[self.terrain_group].shape[-2:])
+            if patch_size != self.network.grid.patch_size:
+                raise ValueError(
+                    f"{self.network_class} was built for terrain patches of {self.network.grid.patch_size}, the"
+                    f" '{terrain_group}' group has {patch_size}; set the network's grid to the env's"
+                )
+
+        self.observers = make_observers(observers or {})
+        self.base_command_group = base_command_group
+        if self.observers and base_command_group not in obs.keys():
+            raise ValueError(
+                f"observers need the '{base_command_group}' observation group; select the preset that turns it on,"
+                " e.g. presets=slowdown"
+            )
+
         # log-parameterized so it stays positive
         self.duration_log_std = nn.Parameter(torch.tensor(math.log(duration_std)))
         self.distribution: FootstepDistribution | None = None
@@ -86,14 +118,23 @@ class GaitNetActor(nn.Module):
         hidden_state=None,
         stochastic_output: bool = False,
     ) -> torch.Tensor:
-        """(N, action_layout.DIM) actions, sampled or deterministic (two-stage select)."""
+        """(N, action_layout.DIM) actions, sampled or deterministic (two-stage select).
+
+        Observers run only when gradients are off, i.e. when acting (rollouts, play): PPO's
+        update calls this again on stored observations, with gradients, only to recompute
+        log-probabilities, and that must not advance the observers' memory.
+        """
         state = torch.cat([obs[group] for group in self.state_groups], dim=-1)
         candidates = Candidates.unpack(obs[self.candidates_group])
         terrain = obs[self.terrain_group] if self.terrain_group is not None else None
         scores = self.network(state, candidates, terrain)
         self.distribution = FootstepDistribution(scores, candidates, self.duration_std)
         selection = self.distribution.sample() if stochastic_output else self.distribution.deterministic()
-        return encode_selection(selection, candidates)
+        nudge = None
+        if self.observers and not torch.is_grad_enabled():
+            plan = plan_from_scores(scores, candidates, selection)
+            nudge = combined_nudge(self.observers, plan, obs[self.base_command_group]).command_delta
+        return encode_selection(selection, candidates, nudge)
 
     def _require_distribution(self) -> FootstepDistribution:
         if self.distribution is None:
@@ -148,7 +189,13 @@ class GaitNetActor(nn.Module):
         return categorical + duration
 
     def reset(self, dones: torch.Tensor | None = None, hidden_state=None) -> None:
-        pass
+        """RSL-RL calls this once per env step with the envs that just ended an episode."""
+        if dones is None or not self.observers:
+            return
+        ended = torch.nonzero(dones.reshape(-1) > 0).flatten()
+        if ended.numel() > 0:
+            for observer in self.observers:
+                observer.reset(ended)
 
     def get_hidden_state(self):
         return None
@@ -166,13 +213,14 @@ class GaitNetActor(nn.Module):
         raise NotImplementedError("export a policy bundle instead, see gaitnet_sim.scripts.export_bundle")
 
 
-def encode_selection(selection: Selection, candidates: Candidates) -> torch.Tensor:
-    """The action vector for a selection: the choice plus the footstep it resolves to."""
+def encode_selection(selection: Selection, candidates: Candidates, nudge: torch.Tensor | None = None) -> torch.Tensor:
+    """The action vector for a selection: the choice, the footstep it resolves to, and the
+    (N, 3) nudge, zero if None."""
     is_step, leg, target = candidates.gather(selection.index)
     return EnvAction(
         choice_index=selection.index,
         duration=selection.duration,
         leg=torch.where(is_step, leg, torch.full_like(leg, NO_STEP_LEG)),
         target=target,
-        nudge=torch.zeros_like(target),
+        nudge=nudge if nudge is not None else torch.zeros_like(target),
     ).encode()
