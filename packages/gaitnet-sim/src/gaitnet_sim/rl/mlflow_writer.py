@@ -16,6 +16,7 @@ import json
 import os
 import pathlib
 import subprocess
+import sys
 from dataclasses import asdict, is_dataclass
 
 from torch.utils.tensorboard import SummaryWriter
@@ -30,6 +31,51 @@ def _git_commit() -> str | None:
         ).stdout.strip()
     except (OSError, subprocess.SubprocessError):
         return None
+
+
+def _default_run_name(log_dir: str, argv: list[str]) -> str:
+    """`<task> <num_envs>env <presets> <overrides> <timestamp>`, read off the command line.
+
+    The train command is the one place that says what distinguishes this run from the last, so
+    the name is built from it: the task, env count, seed, `presets=` and every Hydra override.
+    The log directory's own name (a timestamp) goes last so runs still sort by start time.
+    """
+    task = num_envs = seed = None
+    rest: list[str] = []
+    it = iter(argv)
+    for arg in it:
+        flag, eq, value = arg.partition("=")
+        if flag in ("--task", "--num_envs", "--seed"):
+            value = value if eq else next(it, "")
+            if flag == "--task":
+                task = value.removeprefix("GaitNet-")
+            elif flag == "--num_envs":
+                num_envs = f"{value}env"
+            else:
+                seed = f"s{value}"
+        elif not arg.startswith("-") and eq:
+            rest.append(arg.removeprefix("presets="))
+    parts = [task, num_envs, seed, *rest, os.path.basename(os.path.normpath(log_dir))]
+    return " ".join(p for p in parts if p)
+
+
+def _presets(argv: list[str]) -> str | None:
+    """The comma-separated value of the `presets=` override, if there is one."""
+    for arg in argv:
+        if arg.startswith("presets="):
+            return arg.removeprefix("presets=")
+    return None
+
+
+def _find(cfg, key: str):
+    """The first value under `key` anywhere in a nested dict, depth first."""
+    if isinstance(cfg, dict):
+        if key in cfg:
+            return cfg[key]
+        for item in cfg.values():
+            if (found := _find(item, key)) is not None:
+                return found
+    return None
 
 
 def _to_dict(cfg: dict | object) -> dict:
@@ -69,11 +115,13 @@ class MlflowLogWriter(SummaryWriter, LogWriter):
         if tracking_uri:
             mlflow.set_tracking_uri(tracking_uri)
         mlflow.set_experiment(experiment_name)
-        tags = {"log_dir": os.path.abspath(log_dir)}
+        tags = {"log_dir": os.path.abspath(log_dir), "command": " ".join(sys.argv[1:])[:5000]}
         commit = _git_commit()
         if commit:
             tags["git_commit"] = commit
-        self.run = mlflow.start_run(run_name=run_name or os.path.basename(os.path.normpath(log_dir)), tags=tags)
+        self.run = mlflow.start_run(
+            run_name=run_name or _default_run_name(log_dir, sys.argv[1:]), tags=tags
+        )
         # one request per iteration rather than per scalar
         self._step: int | None = None
         self._metrics: dict[str, float] = {}
@@ -103,6 +151,13 @@ class MlflowLogWriter(SummaryWriter, LogWriter):
             _flatten("env.gaitnet", env["gaitnet"], params)
         if "scene" in env:
             params["env.num_envs"] = str(env["scene"].get("num_envs"))
+        # the preset names alone don't say what they changed; the controller is the part that
+        # matters when comparing runs, and it is only implied by `gpu_mpc`
+        params["presets"] = _presets(sys.argv[1:]) or "default"
+        controller = _find(env, "controller")
+        if isinstance(controller, dict) and controller.get("class_type"):
+            # class_type is a type, so _to_dict stored "<class 'module.Name'>"
+            params["env.controller"] = str(controller["class_type"]).strip("<>'").split(".")[-1]
         self._mlflow.log_params(params)
 
     def _log_params_dir(self) -> None:
