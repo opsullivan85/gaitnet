@@ -17,8 +17,9 @@ x-gpu: &gpu
 
 services:
   # Experiment tracking: runs, metrics and artifacts (checkpoints, env/agent cfgs, bundles).
-  # UI on http://localhost:5000. Other containers reach it as mlflow:5000, which MLflow's
-  # host-header check has to be told about.
+  # UI on http://localhost:5000, and on the LAN at http://<host-ip>:5000 (no auth: home
+  # network only). Other containers reach it as mlflow:5000. MLflow's host-header check has
+  # to be told about every name/IP it is reached by; 192.168.* covers a typical home LAN.
   mlflow:
     image: ghcr.io/mlflow/mlflow:v3.16.1
     command:
@@ -28,9 +29,10 @@ services:
       - --port=5000
       - --backend-store-uri=sqlite:////mlflow/mlflow.db
       - --artifacts-destination=/mlflow/artifacts
-      - --allowed-hosts=mlflow,mlflow:5000,localhost,localhost:5000,127.0.0.1,127.0.0.1:5000
+      - --allowed-hosts=mlflow,mlflow:5000,localhost,localhost:5000,127.0.0.1,127.0.0.1:5000,192.168.*
+      - --cors-allowed-origins=http://localhost:5000,http://127.0.0.1:5000,http://192.168.*
     ports:
-      - 127.0.0.1:5000:5000
+      - 5000:5000
     volumes:
       - mlflow-data:/mlflow
     restart: unless-stopped

@@ -16,11 +16,14 @@ import json
 import os
 import pathlib
 import subprocess
+import sys
 from dataclasses import asdict, is_dataclass
 
 from torch.utils.tensorboard import SummaryWriter
 
 from rsl_rl.utils.log_writer import LogWriter
+
+from gaitnet_sim.rl.export import RUN_ID_FILE
 
 
 def _git_commit() -> str | None:
@@ -30,6 +33,54 @@ def _git_commit() -> str | None:
         ).stdout.strip()
     except (OSError, subprocess.SubprocessError):
         return None
+
+
+_NAMED_OVERRIDES = 3
+
+
+def _default_run_name(log_dir: str, argv: list[str]) -> str:
+    """`<task> <num_envs>env <presets> <overrides> <timestamp>`, read off the command line.
+
+    The train command is the one place that says what distinguishes this run from the last, so
+    the name is built from it. Overrides are shortened to their last key (`sampler=uniform`)
+    and only the first few are named; the `override.*` params hold them all in full. The log
+    directory's own name (a timestamp) goes last so runs still sort by start time.
+    """
+    task = num_envs = seed = None
+    it = iter(argv)
+    for arg in it:
+        flag, eq, value = arg.partition("=")
+        if flag in ("--task", "--num_envs", "--seed"):
+            value = value if eq else next(it, "")
+            if flag == "--task":
+                task = value.removeprefix("GaitNet-")
+            elif flag == "--num_envs":
+                num_envs = f"{value}env"
+            else:
+                seed = f"s{value}"
+    overrides = _overrides(argv)
+    presets = overrides.pop("presets", None)
+    named = [f"{key.rsplit('.', 1)[-1]}={value}" for key, value in list(overrides.items())[:_NAMED_OVERRIDES]]
+    if len(overrides) > _NAMED_OVERRIDES:
+        named.append(f"+{len(overrides) - _NAMED_OVERRIDES}")
+    parts = [task, num_envs, seed, presets, *named, os.path.basename(os.path.normpath(log_dir))]
+    return " ".join(p for p in parts if p)
+
+
+def _overrides(argv: list[str]) -> dict[str, str]:
+    """The Hydra `key=value` overrides on the command line, `presets` included."""
+    return dict(arg.split("=", 1) for arg in argv if not arg.startswith("-") and "=" in arg)
+
+
+def _find(cfg, key: str):
+    """The first value under `key` anywhere in a nested dict, depth first."""
+    if isinstance(cfg, dict):
+        if key in cfg:
+            return cfg[key]
+        for item in cfg.values():
+            if (found := _find(item, key)) is not None:
+                return found
+    return None
 
 
 def _to_dict(cfg: dict | object) -> dict:
@@ -69,11 +120,16 @@ class MlflowLogWriter(SummaryWriter, LogWriter):
         if tracking_uri:
             mlflow.set_tracking_uri(tracking_uri)
         mlflow.set_experiment(experiment_name)
-        tags = {"log_dir": os.path.abspath(log_dir)}
+        tags = {"log_dir": os.path.abspath(log_dir), "command": " ".join(sys.argv[1:])[:5000]}
         commit = _git_commit()
         if commit:
             tags["git_commit"] = commit
-        self.run = mlflow.start_run(run_name=run_name or os.path.basename(os.path.normpath(log_dir)), tags=tags)
+        self.run = mlflow.start_run(
+            run_name=run_name or _default_run_name(log_dir, sys.argv[1:]), tags=tags
+        )
+        # lets a bundle exported from the local run directory name its MLflow run
+        with open(os.path.join(log_dir, RUN_ID_FILE), "w") as f:
+            f.write(self.run.info.run_id)
         # one request per iteration rather than per scalar
         self._step: int | None = None
         self._metrics: dict[str, float] = {}
@@ -103,6 +159,17 @@ class MlflowLogWriter(SummaryWriter, LogWriter):
             _flatten("env.gaitnet", env["gaitnet"], params)
         if "scene" in env:
             params["env.num_envs"] = str(env["scene"].get("num_envs"))
+        # the preset names alone don't say what they changed; the controller is the part that
+        # matters when comparing runs, and it is only implied by `gpu_mpc`
+        overrides = _overrides(sys.argv[1:])
+        params["presets"] = overrides.pop("presets", "default")
+        # the whitelist above leaves most of env out, so what was overridden is logged as typed
+        for key, value in overrides.items():
+            params[f"override.{key}"] = value[:500]
+        controller = _find(env, "controller")
+        if isinstance(controller, dict) and controller.get("class_type"):
+            # class_type is a type, so _to_dict stored "<class 'module.Name'>"
+            params["env.controller"] = str(controller["class_type"]).strip("<>'").split(".")[-1]
         self._mlflow.log_params(params)
 
     def _log_params_dir(self) -> None:

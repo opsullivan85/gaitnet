@@ -27,10 +27,11 @@ compose.
 | `crop` | + group `terrain` | `CandidateScorer` with `xyz_crop`: each candidate also sees the 5 x 5 cells of terrain around it | 0.56 s |
 | `privileged` | + group `privileged` (coarse terrain and foothold validity per leg, base clearance, contact forces) | the critic reads `state` + `privileged` | ~0 |
 | `slowdown` | + group `base_command` | the actor runs the `step_confidence_slowdown` observer while acting | ~0 |
+| `gpu_mpc` | the low-level controller runs batched on the GPU instead of in a CPU process pool | — | ~0 |
 
 \* Forward and backward of the actor on one PPO minibatch (64000 rows, 4 legs x 64
-candidates) on an RTX 5070 Ti; PPO runs 32 per iteration. Rollouts are dominated by the
-CPU MPC either way.
+candidates) on an RTX 5070 Ti; PPO runs 32 per iteration. Without `gpu_mpc`, rollouts are
+dominated by the CPU MPC either way.
 
 `spatial` and `crop` both choose the actor network; if both are given, the first wins.
 
@@ -41,6 +42,35 @@ docker compose -f docker/compose.yaml run --rm sim -m gaitnet_sim.scripts.train 
 
 The `terrain` group costs ~4 GB of rollout storage at 1024 envs x 250 steps, which is why
 it is off unless a preset reads it.
+
+### Low-level controller
+
+The footstep action term owns a controller that turns the planner's footsteps into joint
+torques. Two implement it, running the same convex MPC for the same robot:
+
+| Cfg | Where it runs | Use it for |
+| --- | --- | --- |
+| `PooledMpcControllerCfg` *(default)* | `gaitnet_mpc`, one robot per CPU worker | the reference: every bundle and baseline in this repo was produced against it |
+| `BatchedMpcControllerCfg` (`presets=gpu_mpc`) | `gaitnet_core.control`, the whole batch on the GPU | anything past a few hundred envs |
+
+The CPU pool costs about 6.6 ms per physics step at 100 envs and 223 ms at 4096, roughly
+linear once past the core count. The batched one costs 5.0 ms and 36.8 ms, so it is worth
+1.3x at 100 envs and 6.1x at 4096, and it is what makes the large counts affordable at
+all. It tracks the CPU controller's torques to well under a percent; the measurements,
+the accuracy against solver budget, and the handful of deliberate differences are in
+[gaitnet_core/control/README.md](../gaitnet-core/src/gaitnet_core/control/README.md).
+
+```bash
+docker compose -f docker/compose.yaml run --rm sim -m gaitnet_sim.scripts.train \
+    --task GaitNet-Pillars --num_envs 4096 presets=gpu_mpc,privileged
+
+# more solver iterations per MPC solve: closer to the CPU controller, slower
+presets=gpu_mpc env.actions.footstep.controller.solver_iterations=100
+```
+
+Switching controllers is a sim2real-relevant change, not a pure speed-up: the two agree
+closely but not exactly, so compare a policy trained under one against the other before
+trusting a result that crosses them.
 
 ### Feedback observers in training
 

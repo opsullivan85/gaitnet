@@ -16,7 +16,7 @@ from gaitnet_core.bundle import BundleError, load_bundle, save_bundle  # noqa: E
 from gaitnet_core.candidates import Candidates  # noqa: E402
 from gaitnet_core.features import DEFAULT_FEATURES, feature_dim  # noqa: E402
 from gaitnet_core.robot_spec import ROBOTS  # noqa: E402
-from gaitnet_sim.rl.export import bundle_from_run, latest_checkpoint  # noqa: E402
+from gaitnet_sim.rl.export import RUN_ID_FILE, bundle_from_run, latest_checkpoint  # noqa: E402
 from gaitnet_sim.rl.model import GaitNetActor  # noqa: E402
 
 N, K = 3, 8
@@ -83,6 +83,14 @@ def test_bundle_carries_the_observers(tmp_path):
     bundle = bundle_from_run(tmp_path)
     assert bundle.observers == observers
     assert load_bundle(save_bundle(tmp_path / "bundle.pt", bundle)).make_observers()[0].patience == 7
+
+
+def test_bundle_names_the_mlflow_run_of_its_run_directory(tmp_path):
+    actor, _ = make_actor()
+    write_run(tmp_path, actor)
+    assert "mlflow_run_id" not in bundle_from_run(tmp_path).extra
+    (tmp_path / RUN_ID_FILE).write_text("abc123\n")
+    assert bundle_from_run(tmp_path).extra["mlflow_run_id"] == "abc123"
 
 
 def test_rejects_a_terrain_network_built_for_another_grid(tmp_path):

@@ -44,6 +44,27 @@ def test_presets_compose():
     assert agent.actor.network["candidate_features"] == "xyz_crop"
 
 
+def test_gpu_mpc_preset_swaps_the_controller():
+    """The low-level controller is a preset rather than an override, because Isaac Lab
+    reads a whole-cfg override as choosing a preset by name. Its own fields still take
+    overrides, which is how the solver budget is dialled."""
+    from gaitnet_sim.controllers import BatchedMpc, PooledMpcController
+
+    env, _ = resolve()
+    assert env.actions.footstep.controller.class_type is PooledMpcController
+
+    env, _ = resolve("presets=gpu_mpc")
+    controller = env.actions.footstep.controller
+    assert controller.class_type is BatchedMpc
+    # the two controllers have to agree on the things the env depends on
+    default = resolve()[0].actions.footstep.controller
+    assert controller.iterations_between_mpc == default.iterations_between_mpc
+    assert controller.foot_radius == default.foot_radius
+
+    env, _ = resolve("presets=gpu_mpc", "env.actions.footstep.controller.solver_iterations=120")
+    assert env.actions.footstep.controller.solver_iterations == 120
+
+
 def test_readme_override_recipes():
     """The recipes in packages/gaitnet-sim/README.md resolve as documented."""
     # Isaac Lab 3 applies env./agent. overrides itself, as Python literals

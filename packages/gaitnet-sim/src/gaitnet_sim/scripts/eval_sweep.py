@@ -14,6 +14,11 @@ and `--randomize` keeps training's randomization. Writes one CSV row per robot a
 difficulty, velocity, trial, env, distance (m walked along +x before the robot's first
 episode ended), steps, truncated, terminated_by.
 
+The result is also recorded in MLflow as a run nested under the training run the bundle came
+from (`--mlflow_run` overrides which), with the settings as params, survival and distance
+ratio per difficulty and velocity as metrics (`gaitnet_sim.eval.report`), and the CSV and a
+plot as artifacts. A bundle that names no run is refused before the sweep starts.
+
 Trailing key=value arguments are Hydra overrides of the env cfg.
 """
 
@@ -42,6 +47,11 @@ parser.add_argument(
     "--randomize", action="store_true", help="Keep training's friction, mass and push randomization and observation noise."
 )
 parser.add_argument("--out", default=None, help="CSV path; data/evaluations/<bundle>_<time>.csv by default.")
+parser.add_argument(
+    "--mlflow_run",
+    default=None,
+    help="Training run to record the evaluation under; the bundle's own (bundle.extra) by default.",
+)
 AppLauncher.add_app_launcher_args(parser)
 args_cli, hydra_overrides = parser.parse_known_args()
 simulation_app = AppLauncher(args_cli).app
@@ -63,6 +73,7 @@ from gaitnet_core.refine import Refiner  # noqa: E402
 from gaitnet_core.runtime import PlannerRuntime  # noqa: E402
 from gaitnet_core.samplers import make_sampler  # noqa: E402
 from gaitnet_sim.eval.env_cfg import make_eval_env_cfg  # noqa: E402
+from gaitnet_sim.eval import report  # noqa: E402
 from gaitnet_sim.eval.evaluator import Evaluator  # noqa: E402
 from gaitnet_sim.isaac_robot import IsaacRobot  # noqa: E402
 from gaitnet_sim.tasks import register  # noqa: E402
@@ -77,6 +88,13 @@ _handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s [eval] %(mess
 logger.addHandler(_handler)
 logging.getLogger("gaitnet_sim").addHandler(_handler)
 logging.getLogger("gaitnet_sim").setLevel(logging.INFO)
+
+# what changes the numbers, recorded as params of the MLflow run
+SETTINGS = {
+    "task", "difficulties", "velocities", "envs_per_difficulty", "trials", "terrain_length",
+    "episode_length_s", "sampler", "per_leg", "stochastic", "refine", "refine_steps",
+    "no_observers", "randomize",
+}  # fmt: skip
 
 COLUMNS = ["difficulty", "velocity", "trial", "env", "distance", "steps", "truncated", "terminated_by"]
 
@@ -96,6 +114,13 @@ def main() -> int:
     device = args_cli.device or "cuda:0"
     bundle = load_bundle(args_cli.bundle, map_location=device)
     logger.info(f"bundle {args_cli.bundle}: {bundle.extra}")
+    mlflow_run = args_cli.mlflow_run or bundle.extra.get("mlflow_run_id")
+    if not mlflow_run:
+        logger.error(
+            "the bundle names no MLflow run (export it with --mlflow_run, or from a run"
+            " directory that has mlflow_run_id.txt); pass --mlflow_run to say which"
+        )
+        return 1
 
     env_cfg = parse_env_cfg(args_cli.task, device=device, overrides=hydra_overrides)
     if args_cli.episode_length_s is not None:
@@ -128,6 +153,7 @@ def main() -> int:
     stem = f"{Path(args_cli.bundle).stem}_{args_cli.task}_{time.strftime('%Y%m%d-%H%M%S')}"
     out = Path(args_cli.out or f"data/evaluations/{stem}.csv")
     out.parent.mkdir(parents=True, exist_ok=True)
+    all_rows: list[dict] = []
     with open(out, "w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=COLUMNS)
         writer.writeheader()
@@ -154,12 +180,28 @@ def main() -> int:
                     group = rows[envs_for_difficulty(index, args_cli.envs_per_difficulty)]
                     logger.info(summarize(group, difficulty, velocity))
                     for row in group:
-                        writer.writerow({"difficulty": difficulty, "velocity": velocity, "trial": trial, **row})
+                        row = {"difficulty": difficulty, "velocity": velocity, "trial": trial, **row}
+                        writer.writerow(row)
+                        all_rows.append(row)
                 f.flush()
 
+    step_dt = env.step_dt
     robot.term.controller.close()
     env.close()
     logger.info(f"wrote {out}")
+
+    settings = {key: value for key, value in vars(args_cli).items() if key in SETTINGS}
+    checkpoint = bundle.extra.get("checkpoint")
+    eval_run = report.log_to_mlflow(
+        mlflow_run,
+        all_rows,
+        step_dt,
+        params={**settings, "overrides": " ".join(hydra_overrides)},
+        tags={"checkpoint": str(checkpoint), "iteration": str(bundle.extra.get("iteration")), "bundle": args_cli.bundle},
+        csv_path=out,
+        run_name=f"eval {args_cli.task.removeprefix('GaitNet-')} {checkpoint} {time.strftime('%Y%m%d-%H%M%S')}",
+    )
+    logger.info(f"recorded in MLflow run {eval_run}, under {mlflow_run}")
     return 0
 
 

@@ -25,6 +25,10 @@ from gaitnet_sim.env.contract import GaitNetCfg
 
 _CHECKPOINT = re.compile(r"model_(\d+)\.pt")
 
+RUN_ID_FILE = "mlflow_run_id.txt"
+"""In a run directory: the id of its MLflow run, written by `MlflowLogWriter`. A bundle built
+from the directory carries it as `extra["mlflow_run_id"]`, as one built from MLflow does."""
+
 
 class _ParamsLoader(yaml.SafeLoader):
     """Isaac Lab dumps cfgs with plain `yaml.dump`, which tags Python types
@@ -97,6 +101,9 @@ def bundle_from_run(run_dir: str | Path, checkpoint: str | None = None, extra: d
     network.load_state_dict({key.removeprefix("network."): value for key, value in actor_state.items() if key.startswith("network.")})
     duration_std = float(actor_state["duration_log_std"].exp())
 
+    run_id_file = run_dir / RUN_ID_FILE
+    linked = {"mlflow_run_id": run_id_file.read_text().strip()} if run_id_file.is_file() else {}
+
     controller = env.get("actions", {}).get("footstep", {}).get("controller", {}).get("class_type")
     return PolicyBundle(
         actor=network.eval(),
@@ -111,6 +118,7 @@ def bundle_from_run(run_dir: str | Path, checkpoint: str | None = None, extra: d
             "checkpoint": checkpoint,
             "iteration": saved.get("iter"),
             "controller": str(controller),
+            **linked,
             **(extra or {}),
         },
         observers={name: dict(kwargs or {}) for name, kwargs in (agent["actor"].get("observers") or {}).items()},
