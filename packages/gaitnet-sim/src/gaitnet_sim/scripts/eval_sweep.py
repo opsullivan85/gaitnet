@@ -160,11 +160,14 @@ def main() -> int:
         for velocity in args_cli.velocities:
             command_term.set_command((velocity, 0.0, 0.0))
             for trial in range(args_cli.trials):
-                env.reset()
-                runtime.reset()
-                evaluator.start()
-                start, ticks = time.monotonic(), 0
+                # the reset belongs inside inference mode: controller state rebound
+                # during the previous trial is made of inference tensors, which cannot
+                # be written in place from outside it
                 with torch.inference_mode():
+                    env.reset()
+                    runtime.reset()
+                    evaluator.start()
+                    start, ticks = time.monotonic(), 0
                     while simulation_app.is_running():
                         runtime.step()
                         ticks += 1
