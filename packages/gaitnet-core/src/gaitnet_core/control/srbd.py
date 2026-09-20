@@ -153,7 +153,12 @@ def build(
     forced_response = _forced_response(anb, horizon)
 
     weighted = forced_response * weights.repeat(1, horizon).unsqueeze(-1)
-    hessian = 2.0 * (forced_response.transpose(-1, -2) @ weighted)
+    # B' W B is symmetric, but float32 leaves the product asymmetric by ~1e-4, which is
+    # ten times the ridge below. `admm._invert` factorises the lower triangle alone, so
+    # that asymmetry becomes a different, indefinite P, and ADMM diverges on it. Summing
+    # the product with its transpose is the same value, exactly symmetric, for free.
+    product = forced_response.transpose(-1, -2) @ weighted
+    hessian = product + product.transpose(-1, -2)
     hessian.diagonal(dim1=-2, dim2=-1).add_(model.force_regularization)
 
     predicted = torch.einsum(
