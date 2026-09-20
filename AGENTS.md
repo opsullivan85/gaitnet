@@ -10,7 +10,7 @@ A uv workspace. Everything lives under `packages/`:
 
 | Package | Python | What it is |
 | --- | --- | --- |
-| `gaitnet-core` | 3.11+ | The planner itself: sim/real contract, candidate samplers, networks, selection, bundles, deployment runtime. No simulator, no ROS. |
+| `gaitnet-core` | 3.11+ | The planner itself: sim/real contract, candidate samplers, networks, selection, bundles, deployment runtime, plus `control/`, the batched GPU low-level controller. No simulator, no ROS. |
 | `gaitnet-mpc` | 3.11+ | CPU convex MPC controller (vendored rl-mpc-locomotion) plus its process pool. Has a compiled extension. |
 | `gaitnet-sim` | 3.12+ | Isaac Lab 3 environments, RSL-RL training, export, evaluation. |
 | `gaitnet-ros1` | 3.11+ | The planner on a real robot, over rosbridge websockets. No ROS install needed. |
@@ -19,9 +19,16 @@ A uv workspace. Everything lives under `packages/`:
 ([interfaces.py](packages/gaitnet-core/src/gaitnet_core/interfaces.py)) and both drive its
 `PlannerRuntime`. Put logic that both sides need in core, not in one of the adapters.
 
+There are two low-level controllers, both implementing core's `LowLevelController` and
+both running the same convex MPC: `gaitnet-mpc` in a CPU process pool (the default, and
+the reference every bundle was trained against) and `gaitnet_core.control` batched on the
+GPU (`presets=gpu_mpc`, what large env counts need). The second is a deliberate copy of
+the first, quirks included; don't "fix" one without the other.
+
 Read these before changing anything substantial — they are the real documentation:
 
 - [packages/gaitnet-sim/README.md](packages/gaitnet-sim/README.md) — tasks, presets, cfg overrides.
+- [gaitnet_core/control/README.md](packages/gaitnet-core/src/gaitnet_core/control/README.md) — what the batched controller copies, where it differs, what it costs.
 - [packages/gaitnet-ros1/README.md](packages/gaitnet-ros1/README.md) — the robot ↔ planner message contract, frames, units.
 - [docker/README.md](docker/README.md) — images, every run command, debugging, MLflow.
 
@@ -71,9 +78,10 @@ tests yourself when you touch it.
 - **Rebuild the sim image** when `gaitnet-mpc` changes at all (it is installed
   non-editable) or when any package's dependencies change. Edits to core and sim are
   picked up without a rebuild.
-- **Measure performance changes.** Rollouts are dominated by the CPU MPC, not the GPU
-  policy. If a change is meant to make something faster, benchmark before and after
-  against a frozen baseline rather than reasoning about it.
+- **Measure performance changes.** With the CPU pool, rollouts are dominated by the MPC,
+  not the GPU policy; with `presets=gpu_mpc` that is no longer true past a few hundred
+  envs. Either way, if a change is meant to make something faster, benchmark before and
+  after against a frozen baseline rather than reasoning about it.
 
 ## Style
 
