@@ -23,6 +23,8 @@ from torch.utils.tensorboard import SummaryWriter
 
 from rsl_rl.utils.log_writer import LogWriter
 
+from gaitnet_sim.rl.export import RUN_ID_FILE
+
 
 def _git_commit() -> str | None:
     try:
@@ -33,15 +35,18 @@ def _git_commit() -> str | None:
         return None
 
 
+_NAMED_OVERRIDES = 3
+
+
 def _default_run_name(log_dir: str, argv: list[str]) -> str:
     """`<task> <num_envs>env <presets> <overrides> <timestamp>`, read off the command line.
 
     The train command is the one place that says what distinguishes this run from the last, so
-    the name is built from it: the task, env count, seed, `presets=` and every Hydra override.
-    The log directory's own name (a timestamp) goes last so runs still sort by start time.
+    the name is built from it. Overrides are shortened to their last key (`sampler=uniform`)
+    and only the first few are named; the `override.*` params hold them all in full. The log
+    directory's own name (a timestamp) goes last so runs still sort by start time.
     """
     task = num_envs = seed = None
-    rest: list[str] = []
     it = iter(argv)
     for arg in it:
         flag, eq, value = arg.partition("=")
@@ -53,18 +58,18 @@ def _default_run_name(log_dir: str, argv: list[str]) -> str:
                 num_envs = f"{value}env"
             else:
                 seed = f"s{value}"
-        elif not arg.startswith("-") and eq:
-            rest.append(arg.removeprefix("presets="))
-    parts = [task, num_envs, seed, *rest, os.path.basename(os.path.normpath(log_dir))]
+    overrides = _overrides(argv)
+    presets = overrides.pop("presets", None)
+    named = [f"{key.rsplit('.', 1)[-1]}={value}" for key, value in list(overrides.items())[:_NAMED_OVERRIDES]]
+    if len(overrides) > _NAMED_OVERRIDES:
+        named.append(f"+{len(overrides) - _NAMED_OVERRIDES}")
+    parts = [task, num_envs, seed, presets, *named, os.path.basename(os.path.normpath(log_dir))]
     return " ".join(p for p in parts if p)
 
 
-def _presets(argv: list[str]) -> str | None:
-    """The comma-separated value of the `presets=` override, if there is one."""
-    for arg in argv:
-        if arg.startswith("presets="):
-            return arg.removeprefix("presets=")
-    return None
+def _overrides(argv: list[str]) -> dict[str, str]:
+    """The Hydra `key=value` overrides on the command line, `presets` included."""
+    return dict(arg.split("=", 1) for arg in argv if not arg.startswith("-") and "=" in arg)
 
 
 def _find(cfg, key: str):
@@ -122,6 +127,9 @@ class MlflowLogWriter(SummaryWriter, LogWriter):
         self.run = mlflow.start_run(
             run_name=run_name or _default_run_name(log_dir, sys.argv[1:]), tags=tags
         )
+        # lets a bundle exported from the local run directory name its MLflow run
+        with open(os.path.join(log_dir, RUN_ID_FILE), "w") as f:
+            f.write(self.run.info.run_id)
         # one request per iteration rather than per scalar
         self._step: int | None = None
         self._metrics: dict[str, float] = {}
@@ -153,7 +161,11 @@ class MlflowLogWriter(SummaryWriter, LogWriter):
             params["env.num_envs"] = str(env["scene"].get("num_envs"))
         # the preset names alone don't say what they changed; the controller is the part that
         # matters when comparing runs, and it is only implied by `gpu_mpc`
-        params["presets"] = _presets(sys.argv[1:]) or "default"
+        overrides = _overrides(sys.argv[1:])
+        params["presets"] = overrides.pop("presets", "default")
+        # the whitelist above leaves most of env out, so what was overridden is logged as typed
+        for key, value in overrides.items():
+            params[f"override.{key}"] = value[:500]
         controller = _find(env, "controller")
         if isinstance(controller, dict) and controller.get("class_type"):
             # class_type is a type, so _to_dict stored "<class 'module.Name'>"
