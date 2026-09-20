@@ -13,12 +13,17 @@ ARG TORCH_INDEX=https://download.pytorch.org/whl/cpu
 # the training image's torch minor version, so bundles load the same
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install "torch==2.11.*" --index-url ${TORCH_INDEX}
-
-COPY packages/gaitnet-core /src/gaitnet-core
-COPY packages/gaitnet-ros1 /src/gaitnet-ros1
-# both at once, so gaitnet-ros1's gaitnet-core requirement is the local one
+# for VS Code remote-attach debugging (docker/README.md); off the default index, unlike torch
 RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install /src/gaitnet-core /src/gaitnet-ros1
+    pip install debugpy
 
-WORKDIR /workspace
+# Editable, and compose bind-mounts the checkout over /workspace/gaitnet (as it does for
+# `sim`), so code changes apply without a rebuild and debugger breakpoints match real paths.
+# Both at once, so gaitnet-ros1's gaitnet-core requirement is the local one.
+WORKDIR /workspace/gaitnet
+COPY packages/gaitnet-core packages/gaitnet-core
+COPY packages/gaitnet-ros1 packages/gaitnet-ros1
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install -e packages/gaitnet-core -e packages/gaitnet-ros1
+
 ENTRYPOINT ["python", "-m", "gaitnet_ros1.run"]

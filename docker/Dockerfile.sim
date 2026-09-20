@@ -13,6 +13,11 @@ USER root
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install mlflow-skinny==3.16.1
 
+# For VS Code remote-attach debugging (docker/README.md): `isaaclab.sh -p -m debugpy
+# --listen 0.0.0.0:5678 --wait-for-client -m <script> ...` in place of `-m <script> ...`.
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install debugpy
+
 # The compiled MPC gets a regular install, so the extension built for this Python lives in
 # site-packages where the bind-mounted checkout can't shadow it. Its own layer: it changes
 # rarely and takes a while to compile.

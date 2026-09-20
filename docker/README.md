@@ -78,6 +78,31 @@ Runs are written to `logs/rsl_rl/<experiment>/<timestamp>` in the checkout and t
 MLflow. Files the container writes to the checkout belong to uid 1000, the image's
 `isaaclab` user.
 
+## Debugging
+
+Everything above runs in a container, so there's no local interpreter to point a debugger
+at. VS Code's `.vscode/tasks.json` and `.vscode/launch.json` wire up remote-attach debugpy
+instead, for `sim` and `deploy` alike (both images include `debugpy`, and both bind-mount
+the checkout at `/workspace/gaitnet`, so breakpoints match real file paths):
+
+```bash
+# any of the walk/train/export_bundle/eval_sweep/pytest commands above, wrapped in debugpy
+# and published (`run` needs --service-ports for that)
+docker compose -f docker/compose.yaml run --rm --service-ports sim \
+    -m debugpy --listen 0.0.0.0:5678 --wait-for-client -m gaitnet_sim.scripts.walk --num_envs 4
+
+# deploy's entrypoint is fixed to `python -m gaitnet_ros1.run`, so debugging it overrides
+# the entrypoint to insert debugpy ahead of that
+docker compose -f docker/compose.yaml run --rm --service-ports --entrypoint python deploy \
+    -m debugpy --listen 0.0.0.0:5678 --wait-for-client -m gaitnet_ros1.run --bundle /bundles/policy.pt --host <robot>
+```
+
+The process blocks at `--wait-for-client` until a debugger connects; Isaac Sim can take up
+to a minute to get there. In VS Code: run the matching "Debug: ..." task (Terminal > Run
+Task), wait for that, then start "Attach to GaitNet (docker)" in the Run and Debug panel.
+There's one attach config because the port and path mapping are the same for every target;
+only one debug session can be attached at a time (fixed port 5678).
+
 ## MLflow
 
 Service `mlflow` (`ghcr.io/mlflow/mlflow:v3.16.1`) starts with any `sim` run and keeps

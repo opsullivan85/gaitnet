@@ -51,6 +51,10 @@ services:
       ISAACSIM_PATH: /workspace/isaaclab/_isaac_sim
       MLFLOW_TRACKING_URI: http://mlflow:5000
     working_dir: /workspace/gaitnet
+    # debugpy, for VS Code remote-attach (docker/README.md); `run` needs --service-ports
+    # to actually publish it
+    ports:
+      - 127.0.0.1:5678:5678
     volumes:
       # the checkout, live: the gaitnet packages are installed editable from here
       - type: bind
@@ -74,7 +78,14 @@ services:
       context: ..
       dockerfile: docker/Dockerfile.deploy
     profiles: [ros]
+    # debugpy, for VS Code remote-attach (docker/README.md); `run` needs --service-ports
+    ports:
+      - 127.0.0.1:5678:5678
     volumes:
+      # the checkout, live: gaitnet-core/gaitnet-ros1 are installed editable from here
+      - type: bind
+        source: ..
+        target: /workspace/gaitnet
       - type: bind
         source: ../data/bundles
         target: /bundles
