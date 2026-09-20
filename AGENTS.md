@@ -27,6 +27,8 @@ the first, quirks included; don't "fix" one without the other.
 
 Read these before changing anything substantial — they are the real documentation:
 
+- [ARCHITECTURE.md](ARCHITECTURE.md) — how the pieces fit together, one planning tick end to
+  end, the two scoring networks side by side, and what every preset switches.
 - [packages/gaitnet-sim/README.md](packages/gaitnet-sim/README.md) — tasks, presets, cfg overrides.
 - [gaitnet_core/control/README.md](packages/gaitnet-core/src/gaitnet_core/control/README.md) — what the batched controller copies, where it differs, what it costs.
 - [packages/gaitnet-ros1/README.md](packages/gaitnet-ros1/README.md) — the robot ↔ planner message contract, frames, units.
@@ -72,6 +74,20 @@ tests yourself when you touch it.
   change to features, grid or network arguments invalidates existing bundles — bump
   `FORMAT_VERSION` in [bundle.py](packages/gaitnet-core/src/gaitnet_core/bundle.py) when
   the format itself changes.
+- **Keep [ARCHITECTURE.md](ARCHITECTURE.md) current.** It documents the system as a whole and
+  every preset, so it goes stale from changes that no single package README would catch.
+  Update it in the same change that:
+  - adds, renames or removes a preset, or changes which cfg fields one switches;
+  - adds or changes a scoring network, candidate encoding, sampler, observer, state feature
+    or low-level controller (the registries in §4) — a new network also needs a column in the
+    network comparison;
+  - changes the planning tick: the foothold rules, the selection math, the action layout, the
+    bundle format, the observation groups, or where the sampler runs;
+  - changes the contract's defaults (grid, reach band, features) or the rates;
+  - moves a package boundary or adds one.
+
+  Numbers in it are measured, not estimated. If you change something it quotes a cost for,
+  re-measure or drop the number — don't guess a new one.
 - **Leg order is FL, FR, RL, RR, everywhere.** Per-leg vectors are flattened leg-major.
   Units are SI. Frames are base / yaw / hip-yaw, defined in the
   [ros1 README](packages/gaitnet-ros1/README.md#conventions).

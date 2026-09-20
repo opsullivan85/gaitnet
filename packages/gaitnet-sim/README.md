@@ -35,6 +35,10 @@ dominated by the CPU MPC either way.
 
 `spatial` and `crop` both choose the actor network; if both are given, the first wins.
 
+Each preset is written up in full — what it switches, what it costs, what to watch for — in
+[ARCHITECTURE.md](../../ARCHITECTURE.md#3-presets), which also puts the two scoring networks
+side by side. Keep the two in step when you add or change one.
+
 ```bash
 docker compose -f docker/compose.yaml run --rm sim -m gaitnet_sim.scripts.train \
     --task GaitNet-Pillars --num_envs 1024 presets=spatial,privileged
