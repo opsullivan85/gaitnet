@@ -108,8 +108,8 @@ class CommandsCfg:
 @configclass
 class RewardsCfg:
     alive = RewTerm(func=mdp.is_alive, weight=0.4)
-    xy_tracking = RewTerm(func=rewards.track_lin_vel_xy_exp, weight=0.5, params={"std": 0.5})
-    yaw_tracking = RewTerm(func=rewards.track_ang_vel_z_exp, weight=0.5, params={"std": 0.5})
+    xy_tracking = RewTerm(func=rewards.track_lin_vel_xy_exp, weight=0.5, params={"std": 0.1})
+    yaw_tracking = RewTerm(func=rewards.track_ang_vel_z_exp, weight=0.5, params={"std": 0.1})
 
     step_taken = RewTerm(func=rewards.step_taken, weight=-0.5)
     terminating = RewTerm(func=mdp.is_terminated, weight=-200.0)
