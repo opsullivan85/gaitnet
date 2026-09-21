@@ -307,6 +307,7 @@ rollout buffer.
 | [`crop`](#crop) | `terrain` group on, actor → `CandidateScorer` + `xyz_crop` | cheap terrain awareness |
 | [`privileged`](#privileged) | `privileged` group on, critic reads `state` + `privileged` | better value estimates |
 | [`slowdown`](#slowdown) | `base_command` group on, actor runs `step_confidence_slowdown` | behaviour feedback outside the policy |
+| [`swing_duration_ablation`](#swing_duration_ablation) | actor → `CandidateScorer` with `fixed_duration=0.25` | does the network need to choose the swing duration? |
 | [`gpu_mpc`](#gpu_mpc) | action term's controller → `BatchedMpcController` | large env counts |
 
 ### `spatial`
@@ -345,6 +346,20 @@ relative to its own height. Much cheaper than `spatial` and a useful ablation: i
 **Gotcha.** `spatial` and `crop` are the only two presets that collide: both set
 `agent.actor.network`. Passing both is not an error, only one takes effect (the first), so
 don't — pick one per run.
+
+### `swing_duration_ablation`
+
+| | |
+| --- | --- |
+| Agent | `actor.network` = `CandidateScorer` + `fixed_duration=0.25` ([agent_cfg.py](packages/gaitnet-sim/src/gaitnet_sim/rl/agent_cfg.py)) |
+
+Takes the swing duration out of the policy: every step is commanded for 0.25 s, dial it with
+`agent.actor.network.fixed_duration=0.3`. The network has no duration head, the duration is
+never sampled and isn't in the log-probability, so the policy is the categorical choice alone.
+`fixed_duration` is a network argument, so it is saved in the bundle and deployment needs
+nothing extra. Both networks accept it, but the preset only sets it on the baseline scorer;
+it collides with `spatial` and `crop` like they do with each other (first wins), so it
+doesn't compose with them yet.
 
 ### `privileged`
 

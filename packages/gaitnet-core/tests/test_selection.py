@@ -115,3 +115,14 @@ def test_distribution_log_prob(grid):
     dist.log_prob(step).sum().backward()
     assert std.grad is not None and std.grad != 0
     assert torch.isfinite(dist.entropy()).all()
+
+
+def test_fixed_duration_is_never_sampled(grid):
+    valid = torch.ones(2, 4, *grid.size, dtype=torch.bool)
+    cands = Dense().sample(valid, grid)
+    scores = smooth_scores(cands, noop=-5.0)
+    scores.duration = torch.full_like(scores.duration, 0.25)
+    dist = FootstepDistribution(scores, cands, None)
+    selection = dist.sample()
+    assert torch.all(selection.duration[selection.index < cands.noop_index] == 0.25)
+    assert torch.allclose(dist.log_prob(selection), dist.categorical.log_prob(selection.index))

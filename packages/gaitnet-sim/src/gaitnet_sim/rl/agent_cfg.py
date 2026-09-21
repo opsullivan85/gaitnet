@@ -54,7 +54,10 @@ CANDIDATE_SCORER = {
     "candidate_sizes": [64, 64],
     "trunk_sizes": [128, 128, 128],
 }
-CROP_SCORER = {**CANDIDATE_SCORER, "candidate_features": "xyz_crop", "grid": FOOTHOLD_GRID, "crop_radius": 2}
+FIXED_SWING_DURATION = 0.25
+"""Swing duration (s) of the `swing_duration_ablation` preset, overridable as
+`agent.actor.network.fixed_duration=0.3`."""
+CROP_SCORER ={**CANDIDATE_SCORER, "candidate_features": "xyz_crop", "grid": FOOTHOLD_GRID, "crop_radius": 2}
 DENSE_SPATIAL_CNN = {
     "class_name": "DenseSpatialCNN",
     "grid": FOOTHOLD_GRID,
@@ -70,7 +73,12 @@ class GaitNetActorCfg:
     """Keyword arguments of `GaitNetActor`, see there."""
 
     class_name: str = "gaitnet_sim.rl.model:GaitNetActor"
-    network = preset(default=CANDIDATE_SCORER, spatial=DENSE_SPATIAL_CNN, crop=CROP_SCORER)
+    network = preset(
+        default=CANDIDATE_SCORER,
+        spatial=DENSE_SPATIAL_CNN,
+        crop=CROP_SCORER,
+        swing_duration_ablation={**CANDIDATE_SCORER, "fixed_duration": FIXED_SWING_DURATION},
+    )
     candidates_group: str = "candidates"
     terrain_group: str = "terrain"
     observers = preset(default={}, slowdown=SLOWDOWN_OBSERVERS)

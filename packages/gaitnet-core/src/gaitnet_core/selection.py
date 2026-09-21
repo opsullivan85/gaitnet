@@ -88,7 +88,9 @@ class FootstepDistribution:
     """The stochastic policy: categorical over (candidates + no-op), and a Gaussian swing
     duration for the chosen candidate."""
 
-    def __init__(self, scores: Scores, candidates: Candidates, duration_std: torch.Tensor):
+    def __init__(self, scores: Scores, candidates: Candidates, duration_std: torch.Tensor | None):
+        """`duration_std` None means the duration is fixed by the network: it is the mean,
+        never sampled, and not part of the log-probability."""
         self.scores = scores
         self.candidates = candidates
         self.duration_std = duration_std
@@ -107,13 +109,18 @@ class FootstepDistribution:
 
     def sample(self) -> Selection:
         index = self.categorical.sample()
-        duration = self._duration(index).sample()
+        if self.duration_std is None:
+            duration = self._duration_mean.gather(-1, index.long().unsqueeze(-1)).squeeze(-1)
+        else:
+            duration = self._duration(index).sample()
         return Selection(index=index, duration=torch.where(self._is_step(index), duration, 0.0))
 
     def log_prob(self, selection: Selection) -> torch.Tensor:
         """(N,) joint log-probability. A no-op's duration is never used, so it isn't part
         of the action."""
         index = selection.index.long()
+        if self.duration_std is None:
+            return self.categorical.log_prob(index)
         duration_log_prob = self._duration(index).log_prob(selection.duration)
         duration_log_prob = torch.where(self._is_step(index), duration_log_prob, 0.0)
         return self.categorical.log_prob(index) + duration_log_prob

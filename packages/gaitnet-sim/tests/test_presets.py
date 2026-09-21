@@ -44,6 +44,18 @@ def test_presets_compose():
     assert agent.actor.network["candidate_features"] == "xyz_crop"
 
 
+def test_swing_duration_ablation_fixes_the_duration():
+    _, agent = resolve()
+    assert "fixed_duration" not in agent.actor.network
+
+    _, agent = resolve("presets=swing_duration_ablation")
+    assert agent.actor.network["fixed_duration"] == 0.25
+    assert agent.actor.network["class_name"] == "CandidateScorer"
+
+    _, agent = resolve("presets=swing_duration_ablation", "agent.actor.network.fixed_duration=0.3")
+    assert agent.actor.network["fixed_duration"] == 0.3
+
+
 def test_gpu_mpc_preset_swaps_the_controller():
     """The low-level controller is a preset rather than an override, because Isaac Lab
     reads a whole-cfg override as choosing a preset by name. Its own fields still take

@@ -59,7 +59,8 @@ class GaitNetActor(nn.Module):
                 `{<key of gaitnet_core.observers.OBSERVERS>: kwargs}`
             base_command_group: the group holding the command before any nudge, (N, 3),
                 which observers need
-            duration_std: initial swing duration noise (s), then learned
+            duration_std: initial swing duration noise (s), then learned; unused when the
+                network has a `fixed_duration`
             distribution_cfg: must be None. Isaac Lab's runner cfg gives every model this key;
                 this model's distribution is fixed by the candidates.
         """
@@ -128,7 +129,8 @@ class GaitNetActor(nn.Module):
         candidates = Candidates.unpack(obs[self.candidates_group])
         terrain = obs[self.terrain_group] if self.terrain_group is not None else None
         scores = self.network(state, candidates, terrain)
-        self.distribution = FootstepDistribution(scores, candidates, self.duration_std)
+        fixed = getattr(self.network, "fixed_duration", None) is not None
+        self.distribution = FootstepDistribution(scores, candidates, None if fixed else self.duration_std)
         selection = self.distribution.sample() if stochastic_output else self.distribution.deterministic()
         nudge = None
         if self.observers and not torch.is_grad_enabled():

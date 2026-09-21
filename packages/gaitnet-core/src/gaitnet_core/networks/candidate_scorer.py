@@ -90,6 +90,7 @@ class CandidateScorer(nn.Module):
         use_bf16: bool = True,
         grid: dict | None = None,
         crop_radius: int = 2,
+        fixed_duration: float | None = None,
     ):
         """
         Args:
@@ -104,6 +105,8 @@ class CandidateScorer(nn.Module):
             grid: The foothold grid (`FootholdGrid.to_dict()`) the terrain patches are on,
                 for encodings that read terrain.
             crop_radius: The "xyz_crop" encoding reads (2 r + 1)^2 cells around a candidate.
+            fixed_duration: If set, every step gets this swing duration (s) and the network
+                has no duration head.
         """
         super().__init__()
         self.config = dict(
@@ -118,7 +121,9 @@ class CandidateScorer(nn.Module):
             use_bf16=use_bf16,
             grid=grid,
             crop_radius=crop_radius,
+            fixed_duration=fixed_duration,
         )
+        self.fixed_duration = fixed_duration
         self.encoding = CANDIDATE_FEATURES[candidate_features]
         if self.encoding.uses_terrain and grid is None:
             raise ValueError(f"candidate features '{candidate_features}' read terrain, which needs the foothold grid")
@@ -134,7 +139,7 @@ class CandidateScorer(nn.Module):
         self.noop_embedding = nn.Parameter(torch.randn(candidate_sizes[-1]))
         self.trunk = make_mlp(shared_sizes[-1] + candidate_sizes[-1], trunk_sizes[:-1], trunk_sizes[-1])
         self.logit_head = nn.Linear(trunk_sizes[-1], 1)
-        self.duration_head = nn.Linear(trunk_sizes[-1], 1)
+        self.duration_head = nn.Linear(trunk_sizes[-1], 1) if fixed_duration is None else None
 
     @property
     def uses_terrain(self) -> bool:
@@ -194,6 +199,8 @@ class CandidateScorer(nn.Module):
         trunk_out = self.trunk(trunk_in)
         logits = self.logit_head(trunk_out).squeeze(-1)
 
+        if self.duration_head is None:
+            return logits, torch.full_like(logits, self.fixed_duration, dtype=torch.float32)
         low, high = self.duration_range
         duration = torch.sigmoid(self.duration_head(trunk_out).squeeze(-1).float()) * (high - low) + low
         return logits, duration

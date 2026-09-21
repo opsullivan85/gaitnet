@@ -38,6 +38,7 @@ class DenseSpatialCNN(nn.Module):
         duration_range: tuple[float, float] = (0.1, 0.3),
         checkpoint_chunk_size: int | None = 1024,
         use_bf16: bool = True,
+        fixed_duration: float | None = None,
     ):
         """
         Args:
@@ -53,6 +54,8 @@ class DenseSpatialCNN(nn.Module):
             checkpoint_chunk_size: As for `CandidateScorer`: with gradients enabled, run and
                 checkpoint the batch in chunks of this many robots. None disables it.
             use_bf16: Run under bf16 autocast on CUDA.
+            fixed_duration: If set, every step gets this swing duration (s) and the map head
+                outputs the score map only.
         """
         super().__init__()
         self.config = dict(
@@ -66,7 +69,9 @@ class DenseSpatialCNN(nn.Module):
             duration_range=list(duration_range),
             checkpoint_chunk_size=checkpoint_chunk_size,
             use_bf16=use_bf16,
+            fixed_duration=fixed_duration,
         )
+        self.fixed_duration = fixed_duration
         self.grid = FootholdGrid.from_dict(grid)
         self.height_scale = height_scale
         self.duration_range = tuple(duration_range)
@@ -91,7 +96,8 @@ class DenseSpatialCNN(nn.Module):
         # only the last layer is conditioned: per-layer FiLM's elementwise work outweighed the
         # convolutions themselves
         self.film = nn.Linear(condition_dim, 2 * channels[-1])
-        self.map_head = nn.Conv2d(channels[-1], 2, kernel_size=1)  # score, duration (unsquashed)
+        # score, and unless the duration is fixed, duration (unsquashed)
+        self.map_head = nn.Conv2d(channels[-1], 1 if fixed_duration is not None else 2, kernel_size=1)
         self.noop_head = make_mlp(state_sizes[-1] + channels[-1], noop_sizes, 1)
 
     def forward(self, state: torch.Tensor, candidates: Candidates, terrain: torch.Tensor | None = None) -> Scores:
@@ -150,10 +156,13 @@ class DenseSpatialCNN(nn.Module):
         x = x.mul(1 + scale).add_(shift).relu_()
 
         maps = self.map_head(x)
-        maps = maps.reshape(n, l, 2, *maps.shape[-2:])
-        sampled = sample_patch(maps.float(), xy.float(), self.grid)  # (N, L, K, 2)
-        low, high = self.duration_range
-        duration = torch.sigmoid(sampled[..., 1]) * (high - low) + low
+        maps = maps.reshape(n, l, -1, *maps.shape[-2:])
+        sampled = sample_patch(maps.float(), xy.float(), self.grid)  # (N, L, K, 1 or 2)
+        if self.fixed_duration is not None:
+            duration = torch.full_like(sampled[..., 0], self.fixed_duration)
+        else:
+            low, high = self.duration_range
+            duration = torch.sigmoid(sampled[..., 1]) * (high - low) + low
 
         pooled = x.mean(dim=(-2, -1)).reshape(n, l, -1).mean(dim=1)  # (N, C)
         noop = self.noop_head(torch.cat([embedding, pooled.to(embedding.dtype)], dim=-1)).squeeze(-1)

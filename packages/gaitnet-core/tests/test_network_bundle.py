@@ -90,3 +90,13 @@ def test_bundle_rejects_mismatches(tmp_path):
         bad = dict(manifest, **{key: value})
         with pytest.raises(BundleError):
             check_manifest(bad)
+
+
+def test_fixed_duration_needs_no_duration_head(grid):
+    obs = make_observation(3)
+    valid = torch.ones(3, 4, *grid.size, dtype=torch.bool)
+    cands = UniformJitter(8).sample(valid, grid)
+    state = state_vector(obs.state, DEFAULT_FEATURES)
+    net = _network(fixed_duration=0.25)
+    assert net.duration_head is None
+    assert torch.all(net(state, cands).duration == 0.25)

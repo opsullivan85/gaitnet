@@ -147,6 +147,7 @@ class FootstepPlanner:
         if deterministic:
             selection = select_deterministic(scores, candidates)
         else:
-            std = torch.tensor(self.duration_std, device=scores.duration.device)
+            fixed = getattr(self.network, "fixed_duration", None) is not None
+            std = None if fixed else torch.tensor(self.duration_std, device=scores.duration.device)
             selection = FootstepDistribution(scores, candidates, std).sample()
         return plan_from_scores(scores, candidates, selection)
