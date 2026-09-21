@@ -1,0 +1,29 @@
+{
+    // The sim runs in Docker (docker/README.md), so there is no interpreter here that has
+    // Isaac Lab. Point the analyzer at the workspace sources so imports between packages
+    // resolve; pick any host interpreter with torch for the rest.
+    "python.analysis.extraPaths": [
+        "packages/gaitnet-core/src",
+        "packages/gaitnet-mpc/src",
+        "packages/gaitnet-sim/src",
+        "packages/gaitnet-ros1/src"
+    ],
+    "python.testing.pytestEnabled": true,
+    "python.testing.pytestArgs": ["packages/gaitnet-core/tests", "packages/gaitnet-ros1/tests"],
+    "[python]": {
+        "editor.defaultFormatter": "charliermarsh.ruff",
+        "editor.rulers": [100]
+    },
+    "files.exclude": {
+        "**/__pycache__": true,
+        "**/.pytest_cache": true,
+        "**/.ruff_cache": true,
+        "**/.mypy_cache": true
+    },
+    "search.exclude": {
+        "data/**": true,
+        "logs/**": true,
+        "training/**": true,
+        "packages/gaitnet-mpc/extern/**": true
+    }
+}

@@ -1,0 +1,33 @@
+Why the ratio looks real
+On flat ground (d = 0, no holes at all) the ratio is 0.58 / 0.31 / 0.25 / 0.28 across the four velocities. That's roughly 0.03 to 0.06 m/s of actual forward speed whatever the command. Terrain can't explain that, so the robot really is walking slowly.
+
+A likely cause on the model side: the tracking reward uses std=0.5 (env_cfg.py:111), while commands never exceed 0.2 m/s. Standing completely still at a 0.1 m/s command still earns exp(−0.01/0.25) = 96% of the maximum tracking reward, and 85% at 0.2 m/s. Meanwhile every step costs −0.5 through step_taken. The reward barely pays for speed but charges for every step, which matches a policy that creeps forward. A std closer to the command scale (about 0.1) would make tracking worth something.
+
+
+
+What I'd change
+1. Squash the sample into the range, or shrink the init. This removes the physics-driven pressure rather than fighting it. Either clamp the sample to duration_range in FootstepDistribution.sample() (log-prob stays the un-clamped Normal's, which is the standard clipped-action treatment), or just drop duration_std to ~0.015 so ±2σ stays inside the band.
+
+2. Floor the std by construction. One interpretable number, no force balance to tune, cannot blow up:
+
+
+self.duration_std_floor = float(min_duration_std)  # e.g. 0.01 s
+
+@property
+def duration_std(self) -> torch.Tensor:
+    return self.duration_log_std.exp() + self.duration_std_floor
+Note export.py:102 reads actor_state["duration_log_std"].exp() directly, so it needs the same floor or the bundle will disagree with training.
+
+3. Optionally restore the entropy term, weighted by step probability. If you want σ to adapt rather than just sit on a floor. Don't restore it verbatim — the pre-refactor version added the Gaussian entropy on every transition including no-ops, while the duration log-prob is conditional on stepping (selection.py:118-126). That over-weights the upward push by 1/step_probability. Weight it:
+
+
+def entropy(self) -> torch.Tensor:
+    entropy = self.categorical.entropy()
+    if self.duration_std is not None:
+        entropy = entropy + self.step_probability * self._duration_entropy()
+    return entropy
+My recommendation is 1 + 2 for the next run: both are single numbers, neither can diverge, and together they address the actual cause instead of counterbalancing it. Add 3 only if you find σ pinned to the floor and want it to breathe.
+
+One thing to decide first, though: presets=swing_duration_ablation with fixed_duration=0.25 already exists precisely to answer whether learned duration earns its keep. Given the collapse is also corrupting your discrete ratio, running that ablation against this run would tell you whether to fix the exploration or drop the duration head. Per AGENTS.md, any of these changes also needs ARCHITECTURE.md updated — the selection math and the entropy definition are both documented there.
+
+Want me to implement 1 + 2?

@@ -114,6 +114,6 @@ tests yourself when you touch it.
 
 ## Not in git
 
-`data/`, `training/`, `logs/` and `.vscode/` are ignored — policy bundles, evaluation CSVs
+`data/`, `training/`, `logs/` and `.vscode/` (except `settings`, `tasks` and `launch.json`) are ignored — policy bundles, evaluation CSVs
 and run outputs are local only. Training runs land in `logs/rsl_rl/<experiment>/<timestamp>`
 and in MLflow (http://localhost:5000). Files the container writes are owned by uid 1000.

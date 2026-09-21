@@ -1,0 +1,23 @@
+{
+    // The simulator (and the deploy planner) run in Docker, not a local interpreter, so
+    // debugging is a two-step flow:
+    //   1. Run one of the "Debug: ..." tasks (Terminal > Run Task, or Ctrl+Shift+P >
+    //      "Tasks: Run Task"). It starts the container wrapped in debugpy and waits.
+    //      Isaac Sim can take up to a minute to boot before it reaches that wait.
+    //   2. Start "Attach to GaitNet (docker)" below (Run and Debug panel, or F5) to
+    //      connect and hit breakpoints in gaitnet_core/gaitnet_sim/gaitnet_ros1.
+    // See docker/README.md.
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Attach to GaitNet (docker)",
+            "type": "debugpy",
+            "request": "attach",
+            "connect": { "host": "127.0.0.1", "port": 5678 },
+            "pathMappings": [
+                { "localRoot": "${workspaceFolder}", "remoteRoot": "/workspace/gaitnet" }
+            ],
+            "justMyCode": false
+        }
+    ]
+}

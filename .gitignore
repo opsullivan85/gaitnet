@@ -1,4 +1,7 @@
-**/.vscode
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
 **/data
 **/training
 **/events.out.tfevents.*

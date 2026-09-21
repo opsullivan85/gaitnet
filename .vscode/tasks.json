@@ -1,0 +1,209 @@
+{
+    // Everything Isaac-related runs in Docker (docker/README.md). The "Debug: ..." tasks wait
+    // for a debugger; attach with "Attach to GaitNet (docker)" from launch.json.
+    "version": "2.0.0",
+    "presentation": { "panel": "dedicated", "clear": true },
+    "tasks": [
+        {
+            "label": "Run: walk (holes smoke)",
+            "type": "shell",
+            "command": "docker compose -f docker/compose.yaml run --rm sim -m gaitnet_sim.scripts.walk --num_envs 4"
+        },
+        {
+            "label": "Run: walk (pillars)",
+            "type": "shell",
+            "command": "docker compose -f docker/compose.yaml run --rm sim -m gaitnet_sim.scripts.walk --task GaitNet-Pillars --difficulty 0.3 --num_envs 4"
+        },
+        {
+            "label": "Run: train",
+            "detail": "Pick terrain, env count and presets.",
+            "type": "shell",
+            "command": "docker compose -f docker/compose.yaml run --rm sim -m gaitnet_sim.scripts.train --task ${input:trainTask} --num_envs ${input:trainNumEnvs} agent.max_iterations=${input:trainSteps} ${input:trainPresets}"
+        },
+        {
+            "label": "Run: train (replicate old)",
+            "type": "shell",
+            "command": "docker compose -f docker/compose.yaml run --rm sim -m gaitnet_sim.scripts.train --task GaitNet-Holes --num_envs 96 env.observations.candidates.candidates.params.sampler=uniform_lattice agent.actor.network.candidate_features=xy env.actions.footstep.observation_noise=None env.events.add_base_mass=None env.events.push_robot=None \"env.events.physics_material.params.static_friction_range=(1.0,1.0)\" \"env.events.physics_material.params.dynamic_friction_range=(0.9,0.9)\""
+        },
+        {
+            "label": "Run: export bundle (from MLflow run)",
+            "detail": "Links the bundle to the run and uploads it to the run's bundles/ artifacts.",
+            "type": "shell",
+            "command": "docker compose -f docker/compose.yaml run --rm sim -m gaitnet_sim.scripts.export_bundle --mlflow_run ${input:mlflowRun} --out ${input:bundlePath}"
+        },
+        {
+            "label": "Run: export bundle (from run directory)",
+            "detail": "Links to MLflow only if the directory has mlflow_run_id.txt (runs from before it was added don't).",
+            "type": "shell",
+            "command": "docker compose -f docker/compose.yaml run --rm sim -m gaitnet_sim.scripts.export_bundle --run ${input:runDir} --out ${input:bundlePath}"
+        },
+        {
+            "label": "Run: eval sweep",
+            "detail": "Full sweep, recorded in MLflow under the bundle's training run.",
+            "type": "shell",
+            "command": "docker compose -f docker/compose.yaml run --rm sim -m gaitnet_sim.scripts.eval_sweep --bundle ${input:bundlePath} --task ${input:evalTask} ${input:evalVariant} --mlflow_run=${input:mlflowRunOverride} --terrain_length 2.0 presets=gpu_mpc"
+        },
+        {
+            "label": "Run: eval sweep (quick check)",
+            "detail": "2 difficulties x 1 velocity x 8 robots: does the eval and its MLflow logging work at all.",
+            "type": "shell",
+            "command": "docker compose -f docker/compose.yaml run --rm sim -m gaitnet_sim.scripts.eval_sweep --bundle ${input:bundlePath} --task ${input:evalTask} ${input:evalVariant} --mlflow_run=${input:mlflowRunOverride} --difficulties 0 0.2 --velocities 0.1 --envs_per_difficulty 8 presets=gpu_mpc"
+        },
+        {
+            "label": "Run: pytest (core, sim, ros1)",
+            "type": "shell",
+            "command": "docker compose -f docker/compose.yaml run --rm sim -m pytest packages/gaitnet-core/tests packages/gaitnet-sim/tests packages/gaitnet-ros1/tests"
+        },
+        {
+            "label": "Run: pytest (mpc)",
+            "type": "shell",
+            "command": "docker compose -f docker/compose.yaml run --rm sim -m pytest packages/gaitnet-mpc/tests"
+        },
+        {
+            "label": "Run: deploy planner (vs. real robot)",
+            "type": "shell",
+            "command": "docker compose -f docker/compose.yaml run --rm deploy --bundle /bundles/${input:deployBundle} --host ${input:robotHost}"
+        },
+        {
+            "label": "Run: ROS round trip (fake robot)",
+            "type": "shell",
+            "command": "docker/ros_roundtrip.sh ${input:bundlePath}"
+        },
+        {
+            "label": "Run: shell in sim container",
+            "type": "shell",
+            "command": "docker compose -f docker/compose.yaml run --rm --entrypoint bash sim"
+        },
+        {
+            "label": "Debug: walk (holes smoke)",
+            "detail": "Then run 'Attach to GaitNet (docker)' in Run and Debug once Isaac Sim finishes booting.",
+            "type": "shell",
+            "command": "docker compose -f docker/compose.yaml run --rm --service-ports sim -m debugpy --listen 0.0.0.0:5678 --wait-for-client -m gaitnet_sim.scripts.walk --num_envs 4"
+        },
+        {
+            "label": "Debug: train",
+            "detail": "Then run 'Attach to GaitNet (docker)' in Run and Debug once Isaac Sim finishes booting.",
+            "type": "shell",
+            "command": "docker compose -f docker/compose.yaml run --rm --service-ports sim -m debugpy --listen 0.0.0.0:5678 --wait-for-client -m gaitnet_sim.scripts.train --task ${input:trainTask} --num_envs ${input:trainNumEnvs} ${input:trainPresets}"
+        },
+        {
+            "label": "Debug: export bundle",
+            "detail": "Then run 'Attach to GaitNet (docker)' in Run and Debug.",
+            "type": "shell",
+            "command": "docker compose -f docker/compose.yaml run --rm --service-ports sim -m debugpy --listen 0.0.0.0:5678 --wait-for-client -m gaitnet_sim.scripts.export_bundle --run ${input:runDir} --out ${input:bundlePath}"
+        },
+        {
+            "label": "Debug: eval sweep",
+            "detail": "Then run 'Attach to GaitNet (docker)' in Run and Debug once Isaac Sim finishes booting.",
+            "type": "shell",
+            "command": "docker compose -f docker/compose.yaml run --rm --service-ports sim -m debugpy --listen 0.0.0.0:5678 --wait-for-client -m gaitnet_sim.scripts.eval_sweep --bundle ${input:bundlePath} --task ${input:evalTask} ${input:evalVariant} --mlflow_run=${input:mlflowRunOverride} --difficulties 0 0.2 --velocities 0.1 --envs_per_difficulty 8"
+        },
+        {
+            "label": "Debug: pytest (core, sim, ros1)",
+            "detail": "Then run 'Attach to GaitNet (docker)' in Run and Debug.",
+            "type": "shell",
+            "command": "docker compose -f docker/compose.yaml run --rm --service-ports sim -m debugpy --listen 0.0.0.0:5678 --wait-for-client -m pytest packages/gaitnet-core/tests packages/gaitnet-sim/tests packages/gaitnet-ros1/tests"
+        },
+        {
+            "label": "Debug: pytest (mpc)",
+            "detail": "Then run 'Attach to GaitNet (docker)' in Run and Debug.",
+            "type": "shell",
+            "command": "docker compose -f docker/compose.yaml run --rm --service-ports sim -m debugpy --listen 0.0.0.0:5678 --wait-for-client -m pytest packages/gaitnet-mpc/tests"
+        },
+        {
+            "label": "Debug: deploy planner (vs. real robot)",
+            "detail": "Then run 'Attach to GaitNet (docker)' in Run and Debug.",
+            "type": "shell",
+            "command": "docker compose -f docker/compose.yaml run --rm --service-ports --entrypoint python deploy -m debugpy --listen 0.0.0.0:5678 --wait-for-client -m gaitnet_ros1.run --bundle /bundles/${input:deployBundle} --host ${input:robotHost}"
+        }
+    ],
+    "inputs": [
+        {
+            "id": "trainTask",
+            "type": "pickString",
+            "description": "Terrain to train on",
+            "options": ["GaitNet-Holes", "GaitNet-Pillars"],
+            "default": "GaitNet-Holes"
+        },
+        {
+            "id": "trainNumEnvs",
+            "type": "promptString",
+            "description": "Number of envs",
+            "default": "512"
+        },
+        {
+            "id": "trainSteps",
+            "type": "promptString",
+            "description": "Training iterations (agent.max_iterations)",
+            "default": "50"
+        },
+        {
+            "id": "trainPresets",
+            "type": "pickString",
+            "description": "Presets",
+            "options": [
+                { "label": "privileged + gpu_mpc", "value": "presets=privileged,gpu_mpc" },
+                { "label": "swing_duration_ablation + privileged + gpu_mpc", "value": "presets=swing_duration_ablation,privileged,gpu_mpc" },
+                { "label": "spatial + privileged + gpu_mpc", "value": "presets=spatial,privileged,gpu_mpc" },
+                { "label": "spatial + gpu_mpc", "value": "presets=spatial,gpu_mpc" },
+                { "label": "gpu_mpc", "value": "presets=gpu_mpc" },
+                { "label": "none (CPU MPC pool)", "value": "" }
+            ],
+            "default": "presets=privileged,gpu_mpc"
+        },
+        {
+            "id": "bundlePath",
+            "type": "promptString",
+            "description": "Bundle file",
+            "default": "data/bundles/policy.pt"
+        },
+        {
+            "id": "deployBundle",
+            "type": "promptString",
+            "description": "Bundle file, relative to data/bundles",
+            "default": "policy.pt"
+        },
+        {
+            "id": "robotHost",
+            "type": "promptString",
+            "description": "Robot's rosbridge websocket host"
+        },
+        {
+            "id": "runDir",
+            "type": "promptString",
+            "description": "Run directory",
+            "default": "logs/rsl_rl/gaitnet_holes/"
+        },
+        {
+            "id": "mlflowRun",
+            "type": "promptString",
+            "description": "MLflow run id (the id in the run's URL)"
+        },
+        {
+            "id": "mlflowRunOverride",
+            "type": "promptString",
+            "description": "MLflow run to record the eval under (blank: the one the bundle names)",
+            "default": ""
+        },
+        {
+            "id": "evalTask",
+            "type": "pickString",
+            "description": "Terrain to sweep",
+            "options": ["GaitNet-Holes", "GaitNet-Pillars"],
+            "default": "GaitNet-Holes"
+        },
+        {
+            "id": "evalVariant",
+            "type": "pickString",
+            "description": "How the policy is run",
+            "options": [
+                { "label": "nominal (deterministic, exact observations)", "value": "" },
+                { "label": "--refine (gradient refinement of each footstep)", "value": "--refine" },
+                { "label": "--randomize (training's randomization and noise)", "value": "--randomize" },
+                { "label": "--refine --randomize", "value": "--refine --randomize" },
+                { "label": "--no_observers", "value": "--no_observers" }
+            ],
+            "default": ""
+        }
+    ]
+}
