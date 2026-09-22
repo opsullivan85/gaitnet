@@ -154,7 +154,7 @@ flowchart LR
     subgraph env["Isaac Lab ManagerBasedRLEnv"]
         io["RobotIO<br/>joints, contacts, 4 ray scanners"]
         noise["observation noise"]
-        og["<b>observation groups</b><br/>state · candidates<br/>terrain · privileged · base_command"]
+        og["<b>observation groups</b><br/>state · candidates<br/>terrain · privileged · base_command · footholds"]
         act["<b>footstep action term</b><br/>owns the controller,<br/>executes leg/target/duration + nudge"]
         rew["rewards, terminations,<br/>terrain curriculum"]
     end
@@ -307,6 +307,8 @@ rollout buffer.
 | [`crop`](#crop) | `terrain` group on, actor → `CandidateScorer` + `xyz_crop` | cheap terrain awareness |
 | [`privileged`](#privileged) | `privileged` group on, critic reads `state` + `privileged` | better value estimates |
 | [`slowdown`](#slowdown) | `base_command` group on, actor runs `step_confidence_slowdown` | behaviour feedback outside the policy |
+| [`redirect`](#redirect) | `base_command` and `footholds` groups on, actor runs `blocked_leg_redirect` | steering away from legs short of footholds |
+| `slowdown_redirect` | `base_command` and `footholds` groups on, actor runs both observers | both of the above |
 | [`swing_duration_ablation`](#swing_duration_ablation) | actor → `CandidateScorer` with `fixed_duration=0.25` | does the network need to choose the swing duration? |
 | [`gpu_mpc`](#gpu_mpc) | action term's controller → `BatchedMpcController` | large env counts |
 
@@ -402,6 +404,31 @@ for envs whose episode ended.
 Exported bundles carry their observers, because the policy was trained under them, and
 `eval_sweep` runs them unless given `--no_observers`. Parameters override as
 `agent.actor.observers.step_confidence_slowdown.patience=5`.
+
+### `redirect`
+
+| | |
+| --- | --- |
+| Env | `observations.base_command` as for `slowdown`, plus `observations.footholds` = `FootholdsCfg()`: each leg's valid terrain fraction, (N, L) |
+| Agent | `actor.observers` = `{"blocked_leg_redirect": {"full_fraction": 1.0, "push": 0.0}}` |
+| Cost | ~0 |
+
+`BlockedLegRedirect` reads `PlanResult.foothold_fraction`, the fraction of each leg's
+25 x 25 grid that is valid *terrain* (`FootholdRules.valid_cells`: reach band and edge
+margin, no leg eligibility). That ignores whether the leg may step this tick, so a swinging
+leg still reports the ground under it, and it doesn't depend on the sampler: candidate slot
+counts would, since `uniform_jitter` fills all 64 slots until fewer than 64 cells are valid.
+`FootstepPlanner.plan` fills it from the mask it already builds; in training the `footholds`
+group carries it to the actor, and plans without it make the observer raise.
+
+A leg's blockage is how far its fraction falls short of `full_fraction`, scaled to [0, 1].
+Blockages weight the legs' hip directions; their resultant gives a direction and a strength
+(capped at 1), and that fraction of the command's xy component towards it is removed, plus
+an optional `push` away. The robot slides past a blocked side rather than slowing down; yaw
+is untouched. Low candidate *scores* are deliberately not used: a leg that doesn't need to
+move scores low too.
+
+`slowdown_redirect` runs both observers; their nudges add.
 
 ### `gpu_mpc`
 

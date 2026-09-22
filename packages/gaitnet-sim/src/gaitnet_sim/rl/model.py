@@ -43,6 +43,7 @@ class GaitNetActor(nn.Module):
         terrain_group: str = "terrain",
         observers: dict[str, dict] | None = None,
         base_command_group: str = "base_command",
+        footholds_group: str = "footholds",
         duration_std: float = 0.05,
         distribution_cfg: dict | None = None,
     ):
@@ -59,6 +60,8 @@ class GaitNetActor(nn.Module):
                 `{<key of gaitnet_core.observers.OBSERVERS>: kwargs}`
             base_command_group: the group holding the command before any nudge, (N, 3),
                 which observers need
+            footholds_group: the group holding each leg's valid terrain fraction, (N, L), handed to
+                observers as `PlanResult.foothold_fraction` when present
             duration_std: initial swing duration noise (s), then learned; unused when the
                 network has a `fixed_duration`
             distribution_cfg: must be None. Isaac Lab's runner cfg gives every model this key;
@@ -98,6 +101,7 @@ class GaitNetActor(nn.Module):
 
         self.observers = make_observers(observers or {})
         self.base_command_group = base_command_group
+        self.footholds_group = footholds_group
         if self.observers and base_command_group not in obs.keys():
             raise ValueError(
                 f"observers need the '{base_command_group}' observation group; select the preset that turns it on,"
@@ -134,7 +138,8 @@ class GaitNetActor(nn.Module):
         selection = self.distribution.sample() if stochastic_output else self.distribution.deterministic()
         nudge = None
         if self.observers and not torch.is_grad_enabled():
-            plan = plan_from_scores(scores, candidates, selection)
+            footholds = obs[self.footholds_group] if self.footholds_group in obs.keys() else None
+            plan = plan_from_scores(scores, candidates, selection, footholds)
             nudge = combined_nudge(self.observers, plan, obs[self.base_command_group]).command_delta
         return encode_selection(selection, candidates, nudge)
 

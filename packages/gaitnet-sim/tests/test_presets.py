@@ -25,6 +25,7 @@ def test_defaults_leave_the_optional_groups_off():
     env, agent = resolve()
     observations = env.observations
     assert observations.terrain is None and observations.privileged is None and observations.base_command is None
+    assert observations.footholds is None
     assert agent.actor.network["class_name"] == "CandidateScorer" and agent.actor.network["candidate_features"] == "xyz"
     assert agent.actor.observers == {} and agent.obs_groups["critic"] == ["state"]
 
@@ -38,6 +39,11 @@ def test_presets_compose():
     assert FootholdGrid.from_dict(agent.actor.network["grid"]) == env.gaitnet.foothold_grid()
     assert agent.obs_groups == {"actor": ["state"], "critic": ["state", "privileged"]}
     assert list(agent.actor.observers) == ["step_confidence_slowdown"]
+
+    env, agent = resolve("presets=slowdown_redirect")
+    assert env.observations.base_command is not None
+    assert list(agent.actor.observers) == ["step_confidence_slowdown", "blocked_leg_redirect"]
+    assert env.observations.footholds is not None
 
     env, agent = resolve("presets=crop")
     assert env.observations.terrain is not None and env.observations.privileged is None

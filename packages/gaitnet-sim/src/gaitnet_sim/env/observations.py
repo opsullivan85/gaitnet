@@ -4,8 +4,8 @@ runtime compute the same quantities.
 Groups (see `env_cfg.ObservationsCfg`): `state` (the robot state vector, features chosen by
 name), `candidates` (the footholds the policy scores this tick), and, when a preset turns
 them on, `terrain` (per-leg height patches, for networks that read them), `privileged`
-(sim-only inputs for the critic) and `base_command` (the command before any nudge, for
-feedback observers). Candidates are an observation so the RL library stores them with the
+(sim-only inputs for the critic), `base_command` (the command before any nudge, for
+feedback observers) and `footholds` (each leg's valid terrain fraction, for observers). Candidates are an observation so the RL library stores them with the
 step and can recompute log-probabilities on exactly the set the action was drawn from.
 
 The policy's groups read the action term's `planner_observation()`, which carries the
@@ -21,6 +21,7 @@ import torch.nn.functional as F
 
 from isaaclab.managers import SceneEntityCfg
 
+from gaitnet_core import planner
 from gaitnet_core.features import state_vector
 from gaitnet_core.samplers import make_sampler
 from gaitnet_core.terrain import fill_unknown, inner_heights, valid_footholds
@@ -73,6 +74,14 @@ def footstep_candidates(
 def base_command(env: "ManagerBasedRLEnv", action_name: str = "footstep") -> torch.Tensor:
     """(N, 3) the velocity command before any nudge, which feedback observers scale."""
     return footstep_action(env, action_name).base_command()
+
+
+def foothold_fraction(env: "ManagerBasedRLEnv", action_name: str = "footstep") -> torch.Tensor:
+    """(N, L) fraction of each leg's foothold grid that is valid terrain (terrain rules only, not
+    leg eligibility), as the planner sees it. `PlanResult.foothold_fraction` for observers."""
+    term = footstep_action(env, action_name)
+    cells = env.cfg.gaitnet.foothold_rules().valid_cells(term.planner_observation(), term.spec)
+    return planner.foothold_fraction(cells)
 
 
 ##

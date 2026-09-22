@@ -31,17 +31,29 @@ class FootholdRules:
     min_stance_after_step: int = 2
     """A leg may only lift off if this many legs stay in stance."""
 
-    def valid(self, observation: Observation, spec: RobotSpec) -> torch.Tensor:
-        """(N, L, *grid.size) cells each leg may step to this tick."""
-        cells = valid_footholds(
+    def valid_cells(self, observation: Observation, spec: RobotSpec) -> torch.Tensor:
+        """(N, L, *grid.size) cells the terrain allows each leg, whether or not it may step now."""
+        return valid_footholds(
             observation.terrain.heights,
             spec,
             observation.terrain.grid,
             step_threshold=self.step_threshold,
             edge_margin=self.edge_margin,
         )
+
+    def eligible(self, cells: torch.Tensor, observation: Observation) -> torch.Tensor:
+        """(N, L, *grid.size) `cells` (from `valid_cells`) masked to the legs that may step now."""
         legs = step_eligible(observation.state.gait_timing, self.min_stance_after_step)
         return cells & legs.unsqueeze(-1).unsqueeze(-1)
+
+    def valid(self, observation: Observation, spec: RobotSpec) -> torch.Tensor:
+        """(N, L, *grid.size) cells each leg may step to this tick."""
+        return self.eligible(self.valid_cells(observation, spec), observation)
+
+
+def foothold_fraction(cells: torch.Tensor) -> torch.Tensor:
+    """(N, L) fraction of each leg's grid that is valid terrain, from (N, L, *grid.size) cells."""
+    return cells.flatten(2).float().mean(dim=-1)
 
 
 @dataclass
@@ -57,6 +69,10 @@ class PlanResult:
     """(N,) long, meaningless where not stepping"""
     target: torch.Tensor
     """(N, 3) foothold in the leg's hip yaw frame (m)"""
+    foothold_fraction: torch.Tensor | None = None
+    """(N, L) fraction of each leg's grid that is valid terrain, ignoring whether the leg may
+    step this tick (see `FootholdRules.valid_cells`). For observers; None where the caller
+    didn't provide it."""
 
     def footstep_command(self) -> FootstepCommand:
         return FootstepCommand(
@@ -75,7 +91,12 @@ class PlanResult:
         )
 
 
-def plan_from_scores(scores: Scores, candidates: Candidates, selection: Selection) -> PlanResult:
+def plan_from_scores(
+    scores: Scores,
+    candidates: Candidates,
+    selection: Selection,
+    foothold_fraction: torch.Tensor | None = None,
+) -> PlanResult:
     is_step, leg, target = candidates.gather(selection.index)
     return PlanResult(
         candidates=candidates,
@@ -85,6 +106,7 @@ def plan_from_scores(scores: Scores, candidates: Candidates, selection: Selectio
         is_step=is_step,
         leg=leg,
         target=target,
+        foothold_fraction=foothold_fraction,
     )
 
 
@@ -116,8 +138,19 @@ class FootstepPlanner:
         self.duration_std = duration_std
         self.max_rows_per_forward = max_rows_per_forward
 
-    def sample(self, observation: Observation, generator: torch.Generator | None = None) -> Candidates:
-        valid = self.rules.valid(observation, self.spec)
+    def sample(
+        self,
+        observation: Observation,
+        generator: torch.Generator | None = None,
+        cells: torch.Tensor | None = None,
+    ) -> Candidates:
+        """
+        Args:
+            cells: `rules.valid_cells(observation, spec)`, if already computed
+        """
+        if cells is None:
+            cells = self.rules.valid_cells(observation, self.spec)
+        valid = self.rules.eligible(cells, observation)
         heights = inner_heights(observation.terrain.heights, self.grid)
         return self.sampler.sample(valid, self.grid, heights=heights, generator=generator)
 
@@ -142,7 +175,8 @@ class FootstepPlanner:
         deterministic: bool = True,
         generator: torch.Generator | None = None,
     ) -> PlanResult:
-        candidates = self.sample(observation, generator)
+        cells = self.rules.valid_cells(observation, self.spec)
+        candidates = self.sample(observation, generator, cells)
         scores = self.score(observation, candidates)
         if deterministic:
             selection = select_deterministic(scores, candidates)
@@ -150,4 +184,4 @@ class FootstepPlanner:
             fixed = getattr(self.network, "fixed_duration", None) is not None
             std = None if fixed else torch.tensor(self.duration_std, device=scores.duration.device)
             selection = FootstepDistribution(scores, candidates, std).sample()
-        return plan_from_scores(scores, candidates, selection)
+        return plan_from_scores(scores, candidates, selection, foothold_fraction(cells))
