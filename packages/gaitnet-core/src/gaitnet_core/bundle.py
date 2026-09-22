@@ -107,6 +107,15 @@ def check_manifest(manifest: dict) -> None:
     network_grid = manifest["actor"]["config"].get("grid")
     if network_grid is not None and FootholdGrid.from_dict(network_grid) != FootholdGrid.from_dict(manifest["grid"]):
         raise BundleError(f"network reads terrain on grid {network_grid}, the bundle's grid is {manifest['grid']}")
+    low, high = ROBOTS[manifest["robot"]].swing_duration_range
+    network = manifest["actor"]["config"]
+    network_low, network_high = network.get("duration_range", (low, high))
+    fixed = network.get("fixed_duration")
+    if network_low < low or network_high > high or (fixed is not None and not low <= fixed <= high):
+        raise BundleError(
+            f"network swing durations {fixed if fixed is not None else (network_low, network_high)} are outside"
+            f" the robot's range {(low, high)}"
+        )
     unknown = [name for name in manifest["observers"] if name not in OBSERVERS]
     if unknown:
         raise BundleError(f"unknown observers {unknown}")

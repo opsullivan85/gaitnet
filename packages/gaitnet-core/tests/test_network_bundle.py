@@ -90,6 +90,11 @@ def test_bundle_rejects_mismatches(tmp_path):
         bad = dict(manifest, **{key: value})
         with pytest.raises(BundleError):
             check_manifest(bad)
+    low, high = GO1.swing_duration_range
+    for network_args in [{"duration_range": [low, high + 0.1]}, {"fixed_duration": low - 0.05}]:
+        actor = dict(manifest["actor"], config={**manifest["actor"]["config"], **network_args})
+        with pytest.raises(BundleError):
+            check_manifest(dict(manifest, actor=actor))
 
 
 def test_fixed_duration_needs_no_duration_head(grid):

@@ -129,7 +129,9 @@ class FootstepControlAction(ActionTerm):
         self._footsteps.active[:] = footsteps.active
         self._footsteps.leg[:] = footsteps.leg
         self._footsteps.target[:] = footsteps.target
-        self._footsteps.duration[:] = footsteps.duration
+        # the sampled duration is the network's mean plus unbounded noise
+        low, high = self.spec.swing_duration_range
+        self._footsteps.duration[:] = torch.where(footsteps.active, footsteps.duration.clamp(low, high), 0.0)
         if self.cfg.apply_nudge:
             self._nudge[:] = action.nudge
         self.controller.command_footsteps(self._footsteps)

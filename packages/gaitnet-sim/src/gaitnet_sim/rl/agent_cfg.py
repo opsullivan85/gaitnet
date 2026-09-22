@@ -47,8 +47,12 @@ FOOTHOLD_GRID = {
 with a different grid needs e.g. `agent.actor.network.grid.resolution=...` too; export
 refuses a mismatch."""
 
+SWING_DURATION_RANGE = list(_CONTRACT.robot_spec().swing_duration_range)
+"""The robot's (min, max) swing duration (s), which every network squashes its durations into."""
+
 CANDIDATE_SCORER = {
     "class_name": "CandidateScorer",
+    "duration_range": SWING_DURATION_RANGE,
     "candidate_features": "xyz",
     "shared_sizes": [128, 128, 128],
     "candidate_sizes": [64, 64],
@@ -60,6 +64,7 @@ FIXED_SWING_DURATION = 0.25
 CROP_SCORER ={**CANDIDATE_SCORER, "candidate_features": "xyz_crop", "grid": FOOTHOLD_GRID, "crop_radius": 2}
 DENSE_SPATIAL_CNN = {
     "class_name": "DenseSpatialCNN",
+    "duration_range": SWING_DURATION_RANGE,
     "grid": FOOTHOLD_GRID,
     "channels": [16, 16, 16],
     "state_sizes": [128, 64],

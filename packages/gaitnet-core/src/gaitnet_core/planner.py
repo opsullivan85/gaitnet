@@ -150,4 +150,8 @@ class FootstepPlanner:
             fixed = getattr(self.network, "fixed_duration", None) is not None
             std = None if fixed else torch.tensor(self.duration_std, device=scores.duration.device)
             selection = FootstepDistribution(scores, candidates, std).sample()
+            # the sampled duration is the network's mean plus unbounded noise
+            low, high = self.spec.swing_duration_range
+            is_step = selection.index != candidates.noop_index
+            selection.duration = torch.where(is_step, selection.duration.clamp(low, high), 0.0)
         return plan_from_scores(scores, candidates, selection)
