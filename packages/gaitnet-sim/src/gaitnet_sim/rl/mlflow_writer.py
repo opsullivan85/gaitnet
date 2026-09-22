@@ -112,7 +112,10 @@ class MlflowLogWriter(SummaryWriter, LogWriter):
         experiment_name: str = "gaitnet",
         tracking_uri: str | None = None,
         run_name: str | None = None,
+        run_id: str | None = None,
     ):
+        """`run_id` continues that run (a resumed training run) instead of starting one; the
+        resume's command, log directory and commit go under `resume.<log dir name>.*` tags."""
         import mlflow
 
         super().__init__(log_dir, flush_secs=10)
@@ -124,9 +127,15 @@ class MlflowLogWriter(SummaryWriter, LogWriter):
         commit = _git_commit()
         if commit:
             tags["git_commit"] = commit
-        self.run = mlflow.start_run(
-            run_name=run_name or _default_run_name(log_dir, sys.argv[1:]), tags=tags
-        )
+        self._resume_prefix = None
+        if run_id:
+            self._resume_prefix = f"resume.{os.path.basename(os.path.normpath(log_dir))}"
+            self.run = mlflow.start_run(run_id=run_id)
+            mlflow.set_tags({f"{self._resume_prefix}.{key}": value for key, value in tags.items()})
+        else:
+            self.run = mlflow.start_run(
+                run_name=run_name or _default_run_name(log_dir, sys.argv[1:]), tags=tags
+            )
         # lets a bundle exported from the local run directory name its MLflow run
         with open(os.path.join(log_dir, RUN_ID_FILE), "w") as f:
             f.write(self.run.info.run_id)
@@ -170,7 +179,20 @@ class MlflowLogWriter(SummaryWriter, LogWriter):
         if isinstance(controller, dict) and controller.get("class_type"):
             # class_type is a type, so _to_dict stored "<class 'module.Name'>"
             params["env.controller"] = str(controller["class_type"]).strip("<>'").split(".")[-1]
+        if self._resume_prefix is not None:
+            params = self._params_for_resume(params)
         self._mlflow.log_params(params)
+
+    def _params_for_resume(self, params: dict[str, str]) -> dict[str, str]:
+        """The params a continued run doesn't have yet. MLflow params can't change once
+        logged, so any the resume changed (an override added or edited on resume) are
+        recorded in a tag instead."""
+        logged = self._mlflow.get_run(self.run.info.run_id).data.params
+        changed = {key: value for key, value in params.items() if key in logged and logged[key] != value}
+        if changed:
+            self._mlflow.set_tag(f"{self._resume_prefix}.changed_params", json.dumps(changed)[:5000])
+            print(f"[WARN] Resumed with changed params (kept in a tag, not the params): {changed}")
+        return {key: value for key, value in params.items() if key not in logged}
 
     def _log_params_dir(self) -> None:
         # Isaac Lab writes params/ after the runner (and this writer) exists, so it goes up

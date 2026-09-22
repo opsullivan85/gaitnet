@@ -11,7 +11,8 @@ packages/gaitnet-sim/README.md. Runs are written to
 
 Resume with `--checkpoint latest` (or a path to a `model_*.pt`) and the same task, presets
 and overrides. The terrain curriculum picks up from the checkpoint's levels when the
-terrain rows are unchanged, and from random low rows otherwise.
+terrain rows are unchanged, and from random low rows otherwise. Add `--continue_mlflow` to
+log to the checkpoint's MLflow run instead of starting a new one.
 """
 
 from __future__ import annotations
@@ -39,13 +40,20 @@ def _diff_this_repo_only() -> None:
     Logger._store_code_state = patched
 
 
-def _checkpoint_terrain_levels() -> None:
+def _checkpoint_hooks(continue_mlflow: bool) -> None:
     """Save the terrain curriculum's row counts with every checkpoint, and restore them on
     resume (`--checkpoint`), so a resumed run starts on the terrain it had reached rather
-    than on Isaac Lab's random low rows. See `gaitnet_sim.env.curriculum`."""
+    than on Isaac Lab's random low rows. See `gaitnet_sim.env.curriculum`.
+
+    With `continue_mlflow`, a resumed run also logs to the checkpoint's MLflow run rather
+    than a new one, found from the id `MlflowLogWriter` left in the checkpoint's run
+    directory. The writer is only built when `learn()` starts, after the load, so the id
+    reaches it through the logger cfg.
+    """
     from rsl_rl.runners import OnPolicyRunner
 
     from gaitnet_sim.env.curriculum import restore_terrain_levels, terrain_levels_state
+    from gaitnet_sim.rl.export import RUN_ID_FILE
 
     save, load = OnPolicyRunner.save, OnPolicyRunner.load
 
@@ -65,6 +73,16 @@ def _checkpoint_terrain_levels() -> None:
             print(f"[INFO] Restored terrain levels from {path}.")
         elif terrain_levels_state(env) is not None:
             print(f"[WARN] Not restoring terrain levels, {why_not}: keeping random placement.")
+
+        if continue_mlflow:
+            run_id_file = Path(path).parent / RUN_ID_FILE
+            logger_cfg = self.logger.cfg.get("logger")
+            if not isinstance(logger_cfg, dict) or not logger_cfg["class_name"].endswith("MlflowLogWriter"):
+                raise SystemExit("--continue_mlflow needs the MLflow log writer")
+            if not run_id_file.is_file():
+                raise SystemExit(f"--continue_mlflow: no {RUN_ID_FILE} next to {path}")
+            logger_cfg["run_id"] = run_id_file.read_text().strip()
+            print(f"[INFO] Continuing MLflow run {logger_cfg['run_id']}.")
         return infos
 
     OnPolicyRunner.save, OnPolicyRunner.load = patched_save, patched_load
@@ -73,10 +91,17 @@ def _checkpoint_terrain_levels() -> None:
 def main(argv: list[str] | None = None) -> None:
     from isaaclab_rl.entrypoints.backends.train_rsl_rl import run
 
-    _diff_this_repo_only()
-    _checkpoint_terrain_levels()
+    argv = list(sys.argv[1:] if argv is None else argv)
+    continue_mlflow = "--continue_mlflow" in argv
+    if continue_mlflow:
+        argv.remove("--continue_mlflow")
+        if not any(arg == "--checkpoint" or arg.startswith("--checkpoint=") for arg in argv):
+            raise SystemExit("--continue_mlflow resumes a run, it needs --checkpoint")
 
-    run(["--external_callback", "gaitnet_sim.tasks.register", *(sys.argv[1:] if argv is None else argv)])
+    _diff_this_repo_only()
+    _checkpoint_hooks(continue_mlflow)
+
+    run(["--external_callback", "gaitnet_sim.tasks.register", *argv])
 
 
 if __name__ == "__main__":
