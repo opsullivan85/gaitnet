@@ -31,6 +31,10 @@ Two small images serve deployment (profile `ros`, so `up` leaves them alone):
 - `gaitnet/ros:noetic` (service `ros`, `Dockerfile.ros`): ROS Noetic with rosbridge,
   gaitnet_msgs and a fake robot, standing in for the robot when testing the planner.
 
+`gaitnet/web-viewer:6.1.0` (service `viewer`, profile `viewer`) is NVIDIA's browser client
+for a livestreamed run, built straight from the Isaac Sim repository; see
+[Livestreaming](#livestreaming).
+
 To move to a newer Isaac Lab, change `ISAACLAB_COMMIT` in `build_isaaclab.sh` and
 `ISAACLAB_IMAGE` in `Dockerfile.sim`.
 
@@ -60,6 +64,11 @@ docker compose -f docker/compose.yaml run --rm sim -m gaitnet_sim.scripts.export
 # directory that predates mlflow_run_id.txt needs it)
 docker compose -f docker/compose.yaml run --rm sim -m gaitnet_sim.scripts.eval_sweep --bundle data/bundles/policy.pt \
     --task GaitNet-Pillars
+
+# run a bundle on its task's training terrain until stopped, for watching it (sim-livestream,
+# below); no CSV, no MLflow
+docker compose -f docker/compose.yaml run --rm sim-livestream -m gaitnet_sim.scripts.play \
+    --bundle data/bundles/policy.pt --num_envs 16
 
 # tests for the MPC need the compiled extension
 docker compose -f docker/compose.yaml run --rm sim -m pytest packages/gaitnet-mpc/tests
@@ -106,6 +115,46 @@ Task), wait for that, then start "Attach to GaitNet (docker)" in the Run and Deb
 There's one attach config because the port and path mapping are the same for every target;
 only one debug session can be attached at a time (fixed port 5678).
 
+## Livestreaming
+
+The container has no display, so Isaac Sim runs headless. To watch a walk, training run or
+eval sweep, run it in service `sim-livestream` instead of `sim`. That service streams the
+viewport over WebRTC (`LIVESTREAM=1`, which every `AppLauncher` script reads) and is
+otherwise the same, except for two things. It uses the host's network, because WebRTC media
+doesn't make it through Docker's port mapping: the client connects and then waits forever for
+video. And it reaches MLflow at `localhost:5000`.
+
+```bash
+docker compose -f docker/compose.yaml run --rm sim-livestream \
+    -m gaitnet_sim.scripts.eval_sweep --bundle data/bundles/policy.pt --difficulties 0 0.2
+```
+
+Watch it in a browser with service `viewer` (profile `viewer`): NVIDIA's WebRTC web viewer,
+built from the Isaac Sim repository at `v6.1.0`. Start it once and leave it running, then
+open http://localhost:8210 in a Chromium browser (Firefox connects but never gets video) once
+the env is stepping. While the scene is being built Kit sends no frames, and the viewer gives
+up after five tries; reload the page then, and for each new run. Isaac Lab 3.0 itself only
+updates a livestreamed viewport from its Kit visualizer, which skips headless apps (and a
+livestreamed app is headless), so the env's startup event `pump_kit_for_livestream` does it.
+
+```bash
+docker compose -f docker/compose.yaml --profile viewer up -d viewer
+docker compose -f docker/compose.yaml --profile viewer stop viewer
+```
+
+The browser connects to the sim itself, not through the viewer. The sim hands out the address
+in `PUBLIC_IP` (default `127.0.0.1`), and the viewer has the same address built in. To watch from another machine, set `PUBLIC_IP=<host LAN IP>` for the run,
+and rebuild the viewer with it (`... up -d --build viewer`). NVIDIA's desktop
+[Isaac Sim WebRTC Streaming Client](https://docs.isaacsim.omniverse.nvidia.com/latest/installation/manual_livestream_clients.html)
+works too, at the same address.
+
+The stream has no authentication, and only one client can connect at a time. On the host
+network, a "Debug: ..." task's debugpy (`--listen 0.0.0.0:5678`) is reachable from the LAN
+too. Rendering slows the run down, so leave it off for timed sweeps. The streamer's per-session
+traces (`NvStreamer-*.etli`, written to the working directory, i.e. the checkout) are
+switched off in the image; `Dockerfile.sim` has the flag to turn them back on. The VS Code tasks that boot Isaac Sim
+ask whether to livestream, and "Run: web viewer" starts the viewer.
+
 ## MLflow
 
 Service `mlflow` (`ghcr.io/mlflow/mlflow:v3.16.1`) starts with any `sim` run and keeps
@@ -125,4 +174,7 @@ the first run pays for shader compilation and asset downloads.
 ## Host requirements
 
 An NVIDIA driver new enough for Isaac Sim 6.1 and the NVIDIA Container Toolkit. Tested with
-driver 580.82 and toolkit 1.12 on an RTX 5070 Ti.
+driver 580.82 and toolkit 1.20.1 on an RTX 5070 Ti. Older toolkits (Pop!_OS ships 1.12) run
+headless fine but don't mount the driver's `libnvidia-gpucomp`, so Vulkan fails in the
+container (`vkCreateInstance failed ... ERROR_INCOMPATIBLE_DRIVER`) and livestreaming shows
+nothing. Install NVIDIA's own package, pinned above the distribution's.

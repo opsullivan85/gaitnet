@@ -41,6 +41,21 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 RUN mkdir -p /root/.cache/warp \
  && chown -R isaaclab:isaaclab /root/.cache/warp /workspace/gaitnet
 
+# The WebRTC livestream extension links CloudXR's CUDA 12.0 runtime. Loaded first, it takes
+# the libcudart.so.12 soname and torch (cu128) then fails on a 12.5+ symbol at import. Point
+# it at torch's 12.8 runtime, which is backward compatible within 12.x.
+RUN set -e; \
+    link=$(ls -d /isaac-sim/extscache/omni.kit.livestream.webrtc-*/bin/libcudart.so.12); \
+    ln -sfn /opt/isaaclab-venv/lib/python3.12/site-packages/nvidia/cuda_runtime/lib/libcudart.so.12 "$link"
+
+# The livestream traces every client session to an NvStreamer-*.etli file in the working
+# directory, which is the checkout. Off by default; turn it back on to debug a stream with
+# --kit_args=--/exts/omni.kit.livestream.app/primaryStream/enableEventTracing=true
+RUN set -e; \
+    toml=$(ls /isaac-sim/extscache/omni.kit.livestream.app-*/config/extension.toml); \
+    sed -i 's/^enableEventTracing = true /enableEventTracing = false/' "$toml"; \
+    grep -q '^enableEventTracing = false' "$toml"
+
 USER isaaclab
 
 # isaaclab.sh -p runs the venv's Python with Isaac Sim's environment set up

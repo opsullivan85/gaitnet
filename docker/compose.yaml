@@ -72,6 +72,37 @@ services:
       - ov-logs:/root/.nvidia-omniverse/logs
       - ov-data:/root/.local/share/ov/data
 
+  # `sim`, with its viewport livestreamed over WebRTC (docker/README.md): watch it with
+  # `viewer`. Host networking because WebRTC media doesn't make it through Docker's port
+  # mapping (signalling does, so the client connects but never gets video); NVIDIA runs its
+  # streaming containers the same way. Off the compose network, MLflow is the published port.
+  sim-livestream:
+    extends: sim
+    profiles: [livestream]
+    network_mode: host
+    ports: !reset []
+    environment:
+      LIVESTREAM: "1"
+      # the address the client is told to fetch media from; the host's LAN IP to watch
+      # from another machine
+      PUBLIC_IP: ${PUBLIC_IP:-127.0.0.1}
+      MLFLOW_TRACKING_URI: http://localhost:5000
+
+  # Browser viewer for a livestreamed sim run (`sim-livestream`, docker/README.md), on
+  # http://localhost:8210 in a Chromium browser. NVIDIA's own, built from the Isaac Sim repo
+  # at the release matching the image. The browser connects to the sim directly, at the
+  # address baked in at build time: rebuild after changing PUBLIC_IP. Profile "viewer".
+  viewer:
+    image: gaitnet/web-viewer:6.1.0
+    build:
+      context: https://github.com/isaac-sim/IsaacSim.git#v6.1.0:tools/docker/web-viewer
+      args:
+        ISAACSIM_HOST: ${PUBLIC_IP:-127.0.0.1}
+    profiles: [viewer]
+    ports:
+      - 8210:8210
+    restart: unless-stopped
+
   # The deployed planner (no ROS, no Isaac): runs a bundle from data/bundles against a
   # robot's rosbridge server. Profile "ros", so plain `up` leaves it alone.
   deploy:

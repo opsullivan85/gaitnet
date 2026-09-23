@@ -27,7 +27,7 @@ from isaaclab_physx.physics import PhysxCfg
 from isaaclab_tasks.utils import preset
 
 from gaitnet_core.features import DEFAULT_FEATURES
-from gaitnet_sim.env import curriculum, observations, rewards, terminations
+from gaitnet_sim.env import curriculum, events, observations, rewards, terminations
 from gaitnet_sim.env.actions_cfg import FootstepControlActionCfg
 from gaitnet_sim.env.contract import GaitNetCfg
 from gaitnet_sim.env.scene import GaitNetSceneCfg
@@ -153,8 +153,10 @@ terrain's 1.0, see gaitnet_sim.robot)."""
 @configclass
 class EventsCfg:
     """Resets, plus the sim2real randomization: friction and trunk mass per robot at startup,
-    and pushes. `GaitNetEnvCfg.play_mode` turns the randomization off."""
+    and pushes. `GaitNetEnvCfg.play_mode` turns the randomization off. And a hook that keeps
+    a livestreamed run's viewport updating (`events.pump_kit_for_livestream`)."""
 
+    livestream = EventTerm(func=events.pump_kit_for_livestream, mode="startup")
     physics_material = EventTerm(
         func=mdp.randomize_rigid_body_material,
         mode="startup",
