@@ -66,6 +66,10 @@ class ObservationsCfg:
     class BaseCommandCfg(ObsGroup):
         base_command = ObsTerm(func=observations.base_command)
 
+    @configclass
+    class FootholdsCfg(ObsGroup):
+        foothold_fraction = ObsTerm(func=observations.foothold_fraction)
+
     state: StateCfg = StateCfg()
     candidates: CandidatesCfg = CandidatesCfg()
 
@@ -75,8 +79,12 @@ class ObservationsCfg:
     """For actors whose networks read terrain (the dense spatial CNN, the crop encoder)."""
     privileged = preset(default=None, privileged=PrivilegedCfg())
     """For the privileged critic."""
-    base_command = preset(default=None, slowdown=BaseCommandCfg())
+    base_command = preset(
+        default=None, slowdown=BaseCommandCfg(), redirect=BaseCommandCfg(), slowdown_redirect=BaseCommandCfg()
+    )
     """For feedback observers running in the actor during training."""
+    footholds = preset(default=None, redirect=FootholdsCfg(), slowdown_redirect=FootholdsCfg())
+    """For observers that read `PlanResult.foothold_fraction`."""
 
 
 @configclass

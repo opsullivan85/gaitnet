@@ -12,7 +12,7 @@ from gaitnet_core.candidates import Candidates
 from gaitnet_core.features import DEFAULT_FEATURES, feature_dim, state_vector
 from gaitnet_core.networks import CANDIDATE_FEATURES, CandidateScorer, DenseSpatialCNN
 from gaitnet_core.networks.candidate_scorer import EncoderInputs
-from gaitnet_core.observers import StepConfidenceSlowdown, combined_nudge
+from gaitnet_core.observers import BlockedLegRedirect, StepConfidenceSlowdown, combined_nudge
 from gaitnet_core.planner import FootholdRules, FootstepPlanner
 from gaitnet_core.refine import Refiner
 from gaitnet_core.robot_spec import GO1
@@ -152,6 +152,32 @@ def test_slowdown_after_patient_waiting():
     total = combined_nudge([observer, StepConfidenceSlowdown(patience=1, scale=0.0)], waiting, base)
     assert torch.allclose(total.command_delta[2], -1.0 * base[2])
 
+
+def test_redirect_away_from_blocked_legs():
+    observer = BlockedLegRedirect()
+    forward = torch.tensor([[0.2, 0.0, 0.1]] * 3)
+    # robot 0: both front legs mostly blocked; robot 1: FL half blocked; robot 2: open ground
+    plan = SimpleNamespace(foothold_fraction=torch.tensor([[0.2, 0.2, 1.0, 1.0], [0.5, 1.0, 1.0, 1.0], [1.0] * 4]))
+    delta = observer.observe(plan, forward).command_delta
+    effective = forward + delta
+    assert (delta[:, 2] == 0).all() and (delta[2] == 0).all()
+    assert abs(effective[0, 0]) < 1e-6 and abs(effective[0, 1]) < 1e-6
+    fl = observer.hip_directions[0]
+    assert (effective[1, :2] @ fl) < (forward[1, :2] @ fl) and effective[1, 1] < 0  # slides towards FR
+    # moving away from the blocked side is left alone
+    assert (observer.observe(plan, -forward).command_delta == 0).all()
+    with pytest.raises(ValueError):
+        observer.observe(SimpleNamespace(foothold_fraction=None), forward)
+
+
+def test_plan_reports_terrain_fraction_regardless_of_eligibility(grid):
+    obs = make_observation(2)
+    obs.state.gait_timing[..., 1] = 0.1  # every leg in swing: nothing may step
+    planner = FootstepPlanner(spatial(grid), GO1, grid, DEFAULT_FEATURES, UniformJitter(8))
+    plan = planner.plan(obs)
+    assert not plan.candidates.valid.any()
+    cells = planner.rules.valid_cells(obs, GO1)
+    assert torch.allclose(plan.foothold_fraction, cells.flatten(2).float().mean(-1)) and (plan.foothold_fraction > 0).all()
 
 def test_bundle_with_spatial_network_and_observers(tmp_path, grid):
     net = spatial(grid)

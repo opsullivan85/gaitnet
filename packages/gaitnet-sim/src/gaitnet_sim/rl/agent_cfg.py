@@ -10,6 +10,8 @@ Presets (`presets=<name>[,<name>...]`), each matched by the env cfg's observatio
 - crop: the candidate scorer with the local-crop encoder, reading the terrain group
 - privileged: the critic also reads the privileged group
 - slowdown: the actor runs the step-confidence slowdown observer, reading base_command
+- redirect: the actor runs the blocked-leg redirect observer, reading base_command and footholds
+- slowdown_redirect: both observers, their nudges summed
 """
 
 from __future__ import annotations
@@ -71,6 +73,7 @@ DENSE_SPATIAL_CNN = {
     "noop_sizes": [64],
 }
 SLOWDOWN_OBSERVERS = {"step_confidence_slowdown": {"patience": 10, "margin": 0.0, "scale": 0.5}}
+REDIRECT_OBSERVERS = {"blocked_leg_redirect": {"full_fraction": 1.0, "push": 0.0}}
 
 
 @configclass
@@ -86,8 +89,14 @@ class GaitNetActorCfg:
     )
     candidates_group: str = "candidates"
     terrain_group: str = "terrain"
-    observers = preset(default={}, slowdown=SLOWDOWN_OBSERVERS)
+    observers = preset(
+        default={},
+        slowdown=SLOWDOWN_OBSERVERS,
+        redirect=REDIRECT_OBSERVERS,
+        slowdown_redirect={**SLOWDOWN_OBSERVERS, **REDIRECT_OBSERVERS},
+    )
     base_command_group: str = "base_command"
+    footholds_group: str = "footholds"
     duration_std: float = 0.05
     # Isaac Lab's cfg handling reads these on every model cfg; the actor's distribution is fixed
     distribution_cfg: None = None

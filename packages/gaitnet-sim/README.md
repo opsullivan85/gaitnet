@@ -27,6 +27,8 @@ compose.
 | `crop` | + group `terrain` | `CandidateScorer` with `xyz_crop`: each candidate also sees the 5 x 5 cells of terrain around it | 0.56 s |
 | `privileged` | + group `privileged` (coarse terrain and foothold validity per leg, base clearance, contact forces) | the critic reads `state` + `privileged` | ~0 |
 | `slowdown` | + group `base_command` | the actor runs the `step_confidence_slowdown` observer while acting | ~0 |
+| `redirect` | + group `base_command`, `footholds` | the actor runs the `blocked_leg_redirect` observer while acting | ~0 |
+| `slowdown_redirect` | + group `base_command`, `footholds` | both observers, nudges summed | ~0 |
 | `swing_duration_ablation` | — | `CandidateScorer` with `fixed_duration=0.25` s: no duration head, the policy is the footstep choice alone | ~0 |
 | `gpu_mpc` | the low-level controller runs batched on the GPU instead of in a CPU process pool | — | ~0 |
 
@@ -79,7 +81,7 @@ trusting a result that crosses them.
 
 ### Feedback observers in training
 
-With `slowdown`, the actor scores the candidates as usual and hands the plan to the
+With `slowdown` (or `redirect`, `slowdown_redirect`), the actor scores the candidates as usual and hands the plan to the
 observer, whose nudge (a delta on the velocity command) goes into the action vector. The
 environment applies it, the policy observes the nudged command, and the tracking rewards
 follow it (`env.rewards.xy_tracking.params.command=base` tracks the operator's command
