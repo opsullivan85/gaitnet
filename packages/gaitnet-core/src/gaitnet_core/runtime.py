@@ -26,6 +26,7 @@ class PlannerRuntime:
         rate_hz: float | None = 25.0,
         deterministic: bool = True,
         postprocess: Callable[[PlanResult, Observation], PlanResult] | None = None,
+        on_plan: Sequence[Callable[[PlanResult, Observation], None]] = (),
     ):
         """
         Args:
@@ -35,6 +36,9 @@ class PlannerRuntime:
             postprocess: applied to each plan (with the observation it was planned from)
                 before the observers see it, e.g. continuous refinement
                 (`gaitnet_core.refine.Refiner`)
+            on_plan: called with each final plan and its observation before the command goes
+                out, so they see the robot as the planner did, e.g. visualization
+                (`gaitnet_core.foothold_map`). Their time counts toward the tick's.
         """
         self.robot = robot
         self.planner = planner
@@ -42,6 +46,7 @@ class PlannerRuntime:
         self.period = 1.0 / rate_hz if rate_hz else None
         self.deterministic = deterministic
         self.postprocess = postprocess
+        self.on_plan = list(on_plan)
         self.overruns = 0
         self.plan_durations: deque[float] = deque(maxlen=10000)
         """Seconds from `observe` returning to the command going out, recent ticks."""
@@ -55,6 +60,8 @@ class PlannerRuntime:
         if self.postprocess is not None:
             plan = self.postprocess(plan, observation)
         nudge = combined_nudge(self.observers, plan, observation.state.base_command)
+        for callback in self.on_plan:
+            callback(plan, observation)
         self.robot.command(plan.footstep_command(), nudge)
         self.plan_durations.append(time.perf_counter() - start)
         return plan

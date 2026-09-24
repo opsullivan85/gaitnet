@@ -70,6 +70,12 @@ docker compose -f docker/compose.yaml run --rm sim -m gaitnet_sim.scripts.eval_s
 docker compose -f docker/compose.yaml run --rm sim-livestream -m gaitnet_sim.scripts.play \
     --bundle data/bundles/policy.pt --num_envs 16
 
+# the same, drawing robot 0's foothold scores as per-leg heatmaps in logs/footholds/robot0.png;
+# --footholds_logits corrected for the policy's sampling logits, --footholds_frames to keep
+# every image
+docker compose -f docker/compose.yaml run --rm sim-livestream -m gaitnet_sim.scripts.play \
+    --bundle data/bundles/policy.pt --num_envs 16 --footholds 0
+
 # tests for the MPC need the compiled extension
 docker compose -f docker/compose.yaml run --rm sim -m pytest packages/gaitnet-mpc/tests
 

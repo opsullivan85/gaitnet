@@ -40,22 +40,35 @@ def valid_footholds(
     Returns:
         (N, L, *grid.size) bool, True where a foot may be placed.
     """
+    return reachable_cells(heights, spec, grid) & away_from_edges(heights, grid, step_threshold, edge_margin)
+
+
+def _check_patch(heights: torch.Tensor, grid: FootholdGrid) -> None:
     if tuple(heights.shape[-2:]) != grid.patch_size:
         raise ValueError(f"expected terrain patches of {grid.patch_size}, got {tuple(heights.shape[-2:])}")
 
-    lowest, highest = spec.reach_band
-    reachable = (heights >= lowest) & (heights <= highest)
 
+def reachable_cells(heights: torch.Tensor, spec: RobotSpec, grid: FootholdGrid) -> torch.Tensor:
+    """(N, L, *grid.size) bool, cells whose height is within the leg's reach band. Half of
+    `valid_footholds`; heights as there."""
+    _check_patch(heights, grid)
+    lowest, highest = spec.reach_band
+    return inner_heights((heights >= lowest) & (heights <= highest), grid)
+
+
+def away_from_edges(
+    heights: torch.Tensor, grid: FootholdGrid, step_threshold: float = 0.02, edge_margin: int = 2
+) -> torch.Tensor:
+    """(N, L, *grid.size) bool, cells more than `edge_margin` cells from any height step. The
+    other half of `valid_footholds`; arguments as there."""
+    _check_patch(heights, grid)
     # height range over each cell's 3x3 neighbourhood; unknown (-inf) cells make it inf
     finite = torch.where(torch.isfinite(heights), heights, torch.full_like(heights, -1e6))
     local_max = _window_max(finite, 1)
     local_min = -_window_max(-finite, 1)
     edge = (local_max - local_min) > step_threshold
     near_edge = _window_max(edge.float(), edge_margin) > 0
-
-    valid = reachable & ~near_edge
-    b = grid.border
-    return valid[..., b : b + grid.size[0], b : b + grid.size[1]]
+    return inner_heights(~near_edge, grid)
 
 
 def inner_heights(heights: torch.Tensor, grid: FootholdGrid) -> torch.Tensor:

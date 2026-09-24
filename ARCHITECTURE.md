@@ -205,7 +205,12 @@ flowchart LR
 `PlannerRuntime` is the same loop in both cases
 ([runtime.py](packages/gaitnet-core/src/gaitnet_core/runtime.py)). On hardware it ticks as
 observations arrive (`rate_hz=None`) so the robot sets the pace; in the sim it ticks with the
-env. `FORMAT_VERSION` in [bundle.py](packages/gaitnet-core/src/gaitnet_core/bundle.py) is
+env. Its `on_plan` callbacks see each final plan and its observation before the command goes
+out; that is how `play --footholds` draws the foothold map
+([foothold_map.py](packages/gaitnet-core/src/gaitnet_core/foothold_map.py): a separate dense,
+unmasked scoring pass for the watched robots only, plus the reach and edge masks and the
+plan's choice) as PNG heatmaps
+([gaitnet_sim/viz](packages/gaitnet-sim/src/gaitnet_sim/viz/__init__.py)). `FORMAT_VERSION` in [bundle.py](packages/gaitnet-core/src/gaitnet_core/bundle.py) is
 bumped when the *format* changes; a change to features, grid or network arguments invalidates
 existing bundles without a bump, and loading will say so.
 

@@ -174,3 +174,20 @@ preset). Deploying a bundle on a robot is in [gaitnet-ros1](../gaitnet-ros1/READ
 experimental pieces: `--sampler` / `--per_leg` (the default is dense), `--refine` (gradient
 refinement of each footstep on the network's score, `--refine_steps`), `--stochastic`,
 `--no_observers`, and `--randomize` (training's randomization and noise instead of nominal).
+
+## Watching the planner
+
+`gaitnet_sim.scripts.play --footholds 0 3` draws what the planner saw for those robots on every
+tick ([viz/](src/gaitnet_sim/viz/__init__.py)). The network scores every cell of each leg's
+grid in a separate dense pass, ignoring the masks, so you also see what it makes of cells the
+rules forbid.
+
+Each robot gets a 2x2 figure in `logs/footholds/robot<id>.png` (`--footholds_dir`), replaced
+as it runs. Panels are laid out as seen from above, robot facing up. Darkened cells are out of
+reach, greyed cells are near an edge, the circle is each leg's best cell and the cross is the
+chosen foothold. `--footholds_frames` keeps every image. Drawing takes about 0.2 s per robot,
+so `--footholds_every` helps on long runs.
+
+`--footholds_logits raw` is f(s, l, x), what the deterministic policy's argmax compares within a
+leg. `corrected` is f − log N_valid, what the stochastic policy samples from, on the no-op's
+scale (the no-op is marked on the colour bar). The default follows `--stochastic`.

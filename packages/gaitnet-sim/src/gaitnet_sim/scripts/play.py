@@ -13,6 +13,14 @@ with exact observations unless `--randomize` is given. Nothing is written or log
 MLflow; a line of episode outcomes and the mean terrain level is printed every
 `--report_s` seconds.
 
+`--footholds` draws what the planner sees for the robots it names (`gaitnet_sim.viz`): per-leg
+heatmaps of the scores and masks, written to `--footholds_dir/robot<id>.png` (replaced as it
+runs; open it in a viewer that reloads). They show raw logits, what the deterministic policy
+compares within a leg, or with `--footholds_logits corrected` the ones it samples from, on the
+no-op's scale; by default whichever the run's policy uses.
+
+    python -m gaitnet_sim.scripts.play --bundle bundle.pt --footholds 0 3
+
 Trailing key=value arguments are Hydra overrides of the env cfg.
 """
 
@@ -32,6 +40,13 @@ parser.add_argument(
     "--randomize", action="store_true", help="Keep training's friction, mass and push randomization and observation noise."
 )
 parser.add_argument("--report_s", type=float, default=10.0, help="Seconds between progress lines.")
+parser.add_argument("--footholds", type=int, nargs="+", default=[], help="Robots whose foothold maps to draw.")
+parser.add_argument(
+    "--footholds_logits", choices=["raw", "corrected"], default=None, help="Default: raw, or corrected with --stochastic."
+)
+parser.add_argument("--footholds_every", type=int, default=1, help="Planning ticks between drawings.")
+parser.add_argument("--footholds_dir", default="logs/footholds", help="Where --footholds writes its images.")
+parser.add_argument("--footholds_frames", action="store_true", help="Keep every image drawn, in --footholds_dir/frames.")
 AppLauncher.add_app_launcher_args(parser)
 args_cli, hydra_overrides = parser.parse_known_args()
 simulation_app = AppLauncher(args_cli).app
@@ -62,6 +77,25 @@ _handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s [play] %(mess
 logger.addHandler(_handler)
 
 
+def foothold_plots(num_envs: int, planner) -> list:
+    """The `--footholds` plotter, as `PlannerRuntime` on_plan callbacks."""
+    robots = args_cli.footholds
+    if not robots:
+        return []
+    if not all(0 <= robot < num_envs for robot in robots):
+        raise ValueError(f"--footholds {robots} out of range for {num_envs} envs")
+    from gaitnet_sim.viz.foothold_plot import FootholdPlot
+
+    kind = args_cli.footholds_logits or ("corrected" if args_cli.stochastic else "raw")
+    out_dir = args_cli.footholds_dir
+    logger.info(f"foothold plots of robots {robots} ({kind} logits) in {out_dir}")
+    return [
+        FootholdPlot(
+            planner, robots, out_dir, kind=kind, every=args_cli.footholds_every, keep_frames=args_cli.footholds_frames
+        )
+    ]
+
+
 def main() -> int:
     register()
     device = args_cli.device or "cuda:0"
@@ -80,11 +114,13 @@ def main() -> int:
     robot = IsaacRobot(env)
     observers = [] if args_cli.no_observers else bundle.make_observers()
     logger.info(f"observers: {bundle.observers if observers else 'none'}")
+    planner = bundle.planner(make_sampler(args_cli.sampler))
     runtime = PlannerRuntime(
         robot,
-        bundle.planner(make_sampler(args_cli.sampler)),
+        planner,
         observers=observers,
         deterministic=not args_cli.stochastic,
+        on_plan=foothold_plots(env.num_envs, planner),
     )
     terrain = env.scene.terrain
 
