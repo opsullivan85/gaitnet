@@ -76,6 +76,11 @@ docker compose -f docker/compose.yaml run --rm sim-livestream -m gaitnet_sim.scr
 docker compose -f docker/compose.yaml run --rm sim-livestream -m gaitnet_sim.scripts.play \
     --bundle data/bundles/policy.pt --num_envs 16 --footholds 0
 
+# how far feet land from the footholds a bundle commands (flat ground by default,
+# --difficulty for more; summary printed, one row per footstep in logs/landing/*.csv)
+docker compose -f docker/compose.yaml run --rm sim -m gaitnet_sim.scripts.landing_error \
+    --bundle data/bundles/policy.pt --num_envs 16
+
 # tests for the MPC need the compiled extension
 docker compose -f docker/compose.yaml run --rm sim -m pytest packages/gaitnet-mpc/tests
 

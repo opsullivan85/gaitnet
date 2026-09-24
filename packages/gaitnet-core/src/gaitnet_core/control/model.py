@@ -65,9 +65,6 @@ class SrbdModel:
     nominal_footstep_xy: tuple[tuple[float, float], ...]
     """Per leg, the hip-frame (x, y) a foot is placed at until the planner commands a
     footstep (m). Wider and longer than the hip so the untouched stance is stable."""
-    max_body_travel_compensation: float
-    """Cap on how far a commanded foothold is shifted back to cancel the body's travel
-    over the swing (m). See `controller.py`."""
 
     @property
     def num_legs(self) -> int:
@@ -108,7 +105,6 @@ GO1_SRBD = SrbdModel(
     stance_kd=(14.0, 14.0, 14.0),
     stance_joint_kd=0.6,
     nominal_footstep_xy=((0.1, 0.1), (0.1, -0.1), (-0.1, 0.1), (-0.1, -0.1)),
-    max_body_travel_compensation=0.1,
 )
 
 MODELS: dict[str, SrbdModel] = {GO1_SRBD.spec.name: GO1_SRBD}

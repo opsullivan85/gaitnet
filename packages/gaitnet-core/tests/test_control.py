@@ -558,3 +558,93 @@ def test_torques_are_finite_through_a_full_swing():
         torques = controller.compute_torques(*[a.float() for a in standing(2)])
         assert torch.isfinite(torques).all()
     assert torch.isfinite(controller._feedforward).all()
+
+
+# --- pinned footholds -------------------------------------------------------------
+
+VELOCITY = torch.tensor([0.3, -0.1, 0.02], dtype=torch.float64)
+TARGET = (0.12, 0.09, -0.3)
+
+
+def quaternion(roll: float, pitch: float, yaw: float) -> torch.Tensor:
+    """(4,) xyzw for z-y'-x" intrinsic angles."""
+    (cr, sr), (cp, sp), (cy, sy) = [(math.cos(a / 2), math.sin(a / 2)) for a in (roll, pitch, yaw)]
+    return torch.tensor(
+        [
+            sr * cp * cy - cr * sp * sy,
+            cr * sp * cy + sr * cp * sy,
+            cr * cp * sy - sr * sp * cy,
+            cr * cp * cy + sr * sp * sy,
+        ],
+        dtype=torch.float64,
+    )
+
+
+def travelling(step: int) -> tuple[torch.Tensor, torch.Tensor, float]:
+    """A body moving at a constant world velocity, as the simulator integrates it, while it
+    turns, pitches and rolls. Returns the pose, the twist and the yaw."""
+    yaw = 0.4 + 0.01 * step
+    pose = torch.zeros(1, 7, dtype=torch.float64)
+    pose[0, :3] = torch.tensor([1.0, 2.0, 0.3], dtype=torch.float64) + VELOCITY * DT * step
+    pose[0, 3:] = quaternion(0.03 * math.sin(step / 7), 0.05 - 0.001 * step, yaw)
+    twist = torch.zeros(1, 6, dtype=torch.float64)
+    twist[0, :3] = VELOCITY
+    return pose, twist, yaw
+
+
+def run_footstep(controller: BatchedMpcController, steps: int) -> list[torch.Tensor]:
+    """Command leg 0 to `TARGET` after one step of `travelling`, then keep going. Returns,
+    per step from the one after the command, where the swing is aimed in the world, and
+    the pose."""
+    joint_pos, joint_vel, _, _, command = standing(1)
+    controller.compute_torques(joint_pos, joint_vel, *travelling(0)[:2], command)
+    step = FootstepCommand.none(1)
+    step.active[:] = True
+    step.leg[:] = 0
+    step.target[:] = torch.tensor(TARGET)
+    step.duration[:] = 0.2
+    controller.command_footsteps(step)
+    aimed = []
+    for k in range(1, steps + 1):
+        pose, twist, _ = travelling(k)
+        controller.compute_torques(joint_pos, joint_vel, pose, twist, command)
+        world_from_base = quat_to_rotation(pose[:, 3:7])[0].T
+        from_base = controller._swing_end[0, 0] - controller._position()[0]
+        aimed.append(pose[0, :3] + world_from_base @ from_base)
+    return aimed
+
+
+def test_a_pinned_foothold_stays_put_in_the_world():
+    """The target is fixed where the planner measured it, from the hip and heading of the
+    step after the command, and the swing keeps aiming there however the body moves."""
+    controller = make_controller(1)
+    aimed = run_footstep(controller, steps=40)
+
+    pose, _, yaw = travelling(1)
+    hip = pose[0, :3] + quat_to_rotation(pose[:, 3:7])[0].T @ controller._hip_offsets[0]
+    heading = torch.tensor(
+        [[math.cos(yaw), -math.sin(yaw), 0.0], [math.sin(yaw), math.cos(yaw), 0.0], [0.0, 0.0, 1.0]],
+        dtype=torch.float64,
+    )
+    target = torch.tensor(TARGET, dtype=torch.float64) + torch.tensor([0.0, 0.0, controller.cfg.foot_radius])
+    expected = hip + heading @ target
+    for point in aimed:
+        assert torch.allclose(point, expected, atol=1e-9)
+
+
+def test_a_new_command_or_a_reset_releases_the_pin():
+    controller = make_controller(1)
+    run_footstep(controller, steps=2)
+    assert bool(controller._pinned[0, 0])
+    again = FootstepCommand.none(1)
+    again.active[:] = True
+    again.leg[:] = 0
+    again.target[:] = torch.tensor(TARGET)
+    again.duration[:] = 0.2
+    controller.command_footsteps(again)
+    # re-pinned on the next step, from that step's state
+    assert not bool(controller._pinned[0, 0]) and bool(controller._pin_pending[0, 0])
+    assert not controller._pinned[0, 1:].any() and not controller._pin_pending[0, 1:].any()
+    controller.reset(torch.tensor([0]))
+    assert not controller._pinned.any() and not controller._pin_pending.any()
+    assert float(controller._odometry.abs().max()) == 0.0

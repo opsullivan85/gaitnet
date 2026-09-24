@@ -79,6 +79,12 @@ Switching controllers is a sim2real-relevant change, not a pure speed-up: the tw
 closely but not exactly, so compare a policy trained under one against the other before
 trusting a result that crosses them.
 
+Both pin each footstep's target in the world when it is commanded and swing to that point,
+rather than re-applying the hip-relative offset at touchdown as the vendored controller did
+([ARCHITECTURE.md](../../ARCHITECTURE.md#the-two-low-level-controllers)). Bundles trained
+before that change learned against the old behaviour; `scripts.landing_error` (below)
+measures where feet actually land.
+
 ### Feedback observers in training
 
 With `slowdown` (or `redirect`, `slowdown_redirect`), the actor scores the candidates as usual and hands the plan to the
@@ -174,6 +180,16 @@ preset). Deploying a bundle on a robot is in [gaitnet-ros1](../gaitnet-ros1/READ
 experimental pieces: `--sampler` / `--per_leg` (the default is dense), `--refine` (gradient
 refinement of each footstep on the network's score, `--refine_steps`), `--stochastic`,
 `--no_observers`, and `--randomize` (training's randomization and noise instead of nominal).
+
+`gaitnet_sim.scripts.landing_error` measures how far feet land from the footholds a bundle
+commands, which is the check for any change to the controllers' swing or footstep handling.
+It runs the bundle through the same runtime on training's terrain at one `--difficulty`
+(flat by default) under training's random commands, and follows every footstep at the
+control rate ([eval/landing.py](src/gaitnet_sim/eval/landing.py)): the commanded foothold
+fixed in the world at the command, and the foot at first contact, at the scheduled touchdown
+and 40 ms later. It prints the error's size and its bias along and across the heading, and
+writes one row per footstep to `logs/landing/`. Pass presets and overrides as usual, e.g.
+`presets=gpu_mpc` or `env.commands.base_velocity.ranges.ang_vel_z=[0.0,0.0]`.
 
 ## Watching the planner
 

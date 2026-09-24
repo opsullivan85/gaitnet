@@ -16,6 +16,14 @@ class MpcFootstepController:
     """Convex MPC stance control plus specified-footstep swing control for one robot.
 
     Leg order is FL, FR, RL, RR throughout; joint order within a leg is hip, thigh, calf.
+
+    Each footstep target is fixed in the world when it is commanded and re-aimed from the
+    hip every step, by rewriting the vendored controller's hip-relative target before it
+    runs. The vendored controller would instead execute the target against the hip at
+    touchdown less a predicted body travel, which misses by the body's turning, tilt and
+    change of speed during the swing; that prediction is switched off, since there is no
+    travel left to predict. The world is tracked by integrating the base's world velocity,
+    as the simulator integrates it, so no position estimate is needed.
     """
 
     def __init__(
@@ -49,6 +57,7 @@ class MpcFootstepController:
         Returns:
             (4, 3) joint torques, leg by joint
         """
+        self._aim_pinned_footholds(body_state)
         torques = self.robot_runner.run(
             dof_states=self._convert_joint_states(joint_states),
             body_states=body_state,
@@ -76,6 +85,39 @@ class MpcFootstepController:
             dt=self._dt,
             iterations_between_mpc=self._iterations_between_mpc,
         )
+        self.robot_runner.cMPC.compensate_body_travel = False
+        quadruped = self.robot_runner._quadruped
+        self._hips = np.stack([quadruped.getHipLocation(leg).flatten() for leg in range(4)]).astype(np.float64)
+        """(4, 3) each hip from the base, base frame (m)."""
+        self._odometry = np.zeros(3)
+        """(3,) the base's integrated world velocity (m), the frame pinned footholds live in."""
+        self._targets_hip = np.zeros((4, 3))
+        """(4, 3) the last target commanded per leg, the foot centre in its hip yaw frame (m)."""
+        self._foothold_world = np.zeros((4, 3))
+        """(4, 3) each pinned foothold (the foot centre) in the odometry frame (m)."""
+        self._pin_pending = np.zeros(4, dtype=bool)
+        self._pinned = np.zeros(4, dtype=bool)
+
+    def _aim_pinned_footholds(self, body_state: np.ndarray) -> None:
+        """Advance the odometry, pin footsteps commanded since the last step (their target
+        was measured in this state), and point every pinned leg's hip-relative target, in
+        the base frame, at its foothold."""
+        self._odometry = self._odometry + np.asarray(body_state[7:10], dtype=np.float64) * self._dt
+        world_R_base = _quat_to_matrix(np.asarray(body_state[3:7], dtype=np.float64))
+        if self._pin_pending.any():
+            yaw = np.arctan2(world_R_base[1, 0], world_R_base[0, 0])
+            c, s = np.cos(yaw), np.sin(yaw)
+            heading = np.array([[c, -s, 0.0], [s, c, 0.0], [0.0, 0.0, 1.0]])
+            legs = self._pin_pending
+            self._foothold_world[legs] = (
+                self._odometry + self._hips[legs] @ world_R_base.T + self._targets_hip[legs] @ heading.T
+            )
+            self._pinned |= legs
+            self._pin_pending[:] = False
+        if self._pinned.any():
+            legs = self._pinned
+            aimed = (self._foothold_world[legs] - self._odometry) @ world_R_base - self._hips[legs]
+            self.robot_runner.cMPC.footstep_locations_hip[legs] = aimed
 
     @staticmethod
     def _convert_joint_states(joint_states_interface: np.ndarray) -> np.ndarray:
@@ -92,6 +134,9 @@ class MpcFootstepController:
         """Start a swing of `leg` to `location_hip`, (x, y, z) relative to that leg's hip in
         its gravity-aligned yaw frame (z negative below the hip), over `duration` s."""
         self.robot_runner.cMPC.initiate_footstep(leg, location_hip, duration)
+        self._targets_hip[leg] = np.asarray(location_hip, dtype=np.float64).reshape(-1)
+        self._pin_pending[leg] = True
+        self._pinned[leg] = False
 
     def get_contact_state(self) -> np.ndarray:
         """(4,) bool, whether the schedule has each leg in stance."""
@@ -138,3 +183,16 @@ class MpcFootstepController:
         return np.stack([swing_phase, swing_remaining, stance_time], axis=1).astype(
             np.float32
         )
+
+
+def _quat_to_matrix(quat: np.ndarray) -> np.ndarray:
+    """(3, 3) rotation taking base vectors into the world, for an xyzw quaternion. In
+    float64: the vendored `orientation_tools` computes in float16."""
+    x, y, z, w = quat / np.linalg.norm(quat)
+    return np.array(
+        [
+            [1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)],
+            [2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)],
+            [2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)],
+        ]
+    )

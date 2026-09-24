@@ -37,7 +37,6 @@ def test_swing_apex_clears_the_higher_end(step):
 
 def test_swing_ends_at_the_commanded_point_below_the_hip():
     controller = MpcFootstepController(dt=DT, iterations_between_mpc=5)
-    controller.robot_runner.cMPC.compensate_body_travel = False
     joint, body, command = standing_state()
     controller.get_torques(joint, body, command)
 

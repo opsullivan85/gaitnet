@@ -15,7 +15,7 @@ worse with every environment added. Select it with `presets=gpu_mpc`; see
 compute_torques(joint state, base pose, base twist, velocity command) -> (N, 12) torques
   kinematics.py   where each foot is and how fast, and the Jacobian
   controller.py   orientation and a body height read off the stance feet
-  controller.py   the planner's hip-frame targets -> touchdown points
+  controller.py   the planner's hip-frame targets -> points pinned in the world
   srbd.py         the state -> a dense QP in the contact forces      | every 5th
   admm.py         that QP, for the whole batch                       | step
   swing.py        the arc a swinging foot follows
@@ -40,6 +40,20 @@ buys nothing and silently invalidates the comparisons.
 | `kinematics.py` | `LegController.computeLegJacobianAndPosition` |
 | `rotations.py` | `math_utils.orientation_tools` |
 | `model.py` | `Quadruped(RobotType.GO1)` and `Parameters` |
+
+One thing both controllers do that upstream doesn't: **footstep targets are pinned in the
+world**. Upstream executes the planner's hip-relative target against the hip at touchdown,
+less a prediction of the body's travel over the swing, which is only right if the body keeps
+its speed and neither turns nor tilts; measured with `gaitnet_sim.scripts.landing_error`,
+feet landed a median 1.5 cm (p99 3.9 cm) from the commanded foothold, 1.3 cm of it from that
+formula. Now each target is fixed in an odometry frame (the base's integrated world velocity)
+on the step after it is commanded, from the state the planner measured it in, and the swing
+is re-aimed at it from the hip every step; measured the same way, feet then land a median
+7.0 mm off (p99 3.2 cm), the swing's own tracking error. Here that is `BatchedMpcController._pinned_offsets`;
+in `gaitnet-mpc` it is the wrapper, `MpcFootstepController._aim_pinned_footholds`, which
+rewrites the vendored target before each run and switches its travel prediction off, so the
+vendored code is untouched. Bundles trained before the change learned against the old
+behaviour.
 
 Upstream attribution and licences are in
 [gaitnet-mpc/THIRD_PARTY.md](../../../../gaitnet-mpc/THIRD_PARTY.md). The two papers the

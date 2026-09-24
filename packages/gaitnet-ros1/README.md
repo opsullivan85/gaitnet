@@ -100,9 +100,14 @@ steppability: the planner applies its own reach and edge rules.
 Each `FootstepCommand` fields:
 
 - `leg`: which leg to swing.
-- `target[3]`: the foothold, relative to that leg's hip, in the hip yaw frame. Its z is the
-  terrain **surface** there, where the sole touches. Add your foot's radius to get the
-  foot centre (the simulator adds 0.02 m for the Go1).
+- `target[3]`: the foothold, relative to that leg's hip, in the hip yaw frame **of the
+  observation it answers**. Its z is the terrain **surface** there, where the sole touches.
+  Add your foot's radius to get the foot centre (the simulator adds 0.02 m for the Go1).
+  It names a spot on the ground, not an offset to keep: fix it in your odometry frame
+  using the hip position and heading at `observation_stamp`, and swing to that point
+  wherever the body has moved by touchdown. The simulated controllers, which the policies
+  are trained against, do exactly this; re-applying the offset to the hip later lands the
+  foot off by however far the body travelled, turned or tilted in between.
 - `duration`: seconds from lift-off to touchdown, between 0.1 and 0.3 for current policies.
 
 What the planner guarantees:
@@ -122,7 +127,9 @@ the next observation.
 
 - **Latency**: the robot can measure it as now minus `observation_stamp` when a command
   arrives. The robot should ignore commands answering an observation older than it
-  tolerates, for example 100 ms.
+  tolerates, for example 100 ms. Keep that much history of the base pose in the odometry
+  frame, so a target can be pinned from the pose at `observation_stamp` rather than the
+  pose when the command arrives: at 0.2 m/s, 50 ms of latency is 1 cm.
 - **Stale observations**: the planner stops, with an error, when no new observation
   arrives within `--timeout` (0.5 s by default). It never re-plans on old data.
 - **Missing commands**: the robot must stay safe when commands stop arriving at any time,

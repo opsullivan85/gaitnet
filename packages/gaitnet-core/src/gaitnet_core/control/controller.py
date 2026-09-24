@@ -21,8 +21,11 @@ The frames are the CPU controller's and are worth stating, because their names t
 not always their contents. The estimator never sees a world position, so its "global"
 frame is really an instantaneous frame with its origin under the body: x and y of the
 estimated position are always zero and only z, the height above the stance feet, means
-anything. Footstep targets arrive in each leg's gravity-aligned hip frame and are used
-against the hip at *touchdown*, which is what the body-travel compensation below is for.
+anything. Footstep targets arrive in each leg's gravity-aligned hip frame, measured at the
+moment of the command. Each one is fixed in the world then and re-aimed from the hip every
+step, so the body's travel, turning and tilt during the swing don't carry the foot off the
+chosen spot; the world is tracked by integrating the base's velocity, so this still needs
+no position estimate.
 
 Two things differ from the CPU controller on purpose, and neither changes what the robot
 does:
@@ -106,6 +109,10 @@ class BatchedMpcController:
             return torch.zeros(num_robots, legs, 3, device=device, dtype=self.dtype)
 
         self._footstep_offsets = self._nominal_offsets.expand(num_robots, legs, 3).clone()
+        self._odometry = torch.zeros(num_robots, 3, device=device, dtype=self.dtype)
+        self._foothold_world = per_foot()
+        self._pin_pending = torch.zeros(num_robots, legs, device=device, dtype=torch.bool)
+        self._pinned = torch.zeros(num_robots, legs, device=device, dtype=torch.bool)
         self._feedforward = per_foot()
         self._swing_start = per_foot()
         self._swing_end = per_foot()
@@ -154,6 +161,11 @@ class BatchedMpcController:
         chosen = torch.where(footsteps.active.view(-1, 1, 1), target.unsqueeze(1), held)
         self._footstep_offsets.scatter_(1, index, chosen)
         self._gait.initiate(footsteps.active, footsteps.leg, footsteps.duration)
+        # pinned on the next control step, whose state is the one the target was measured in
+        sent = torch.zeros_like(self._pinned).scatter_(1, footsteps.leg.view(-1, 1), True)
+        sent &= footsteps.active.view(-1, 1)
+        self._pin_pending |= sent
+        self._pinned &= ~sent
 
     def compute_torques(
         self,
@@ -167,7 +179,8 @@ class BatchedMpcController:
 
         `base_pose`'s world position is ignored, as it is by the CPU controller: nothing
         downstream of here knows where the robot is, only how it is oriented and how far
-        it is above its own feet.
+        it is above its own feet. Pinned footholds are tracked against the integrated
+        world velocity instead.
         """
         model = self.model
         legs = model.num_legs
@@ -207,7 +220,8 @@ class BatchedMpcController:
 
         self._update_height(tilt, foot_in_base)
         position = self._position()
-        self._swing_end = self._touchdown_targets(linear_velocity, position)
+        offsets = self._pinned_offsets(base_pose.to(self.dtype), base_vel.to(self.dtype), rpy[:, 2])
+        self._swing_end = self._hip_offsets + offsets + position.unsqueeze(1)
 
         contact = self._gait.in_contact()
         swing_phase = self._gait.swing_phase()
@@ -272,27 +286,37 @@ class BatchedMpcController:
         average = (heights * weight).sum(dim=-1) / total.clamp_min(1e-6)
         self._height = torch.where(total > 0, average, self._height)
 
-    def _touchdown_targets(
-        self, linear_velocity: torch.Tensor, position: torch.Tensor
+    def _pinned_offsets(
+        self, base_pose: torch.Tensor, base_vel: torch.Tensor, yaw: torch.Tensor
     ) -> torch.Tensor:
-        """(N, L, 3) where each foot is aiming, in the estimator's frame.
+        """(N, L, 3) footstep offsets from each hip in the base frame: each commanded leg's
+        aimed at its foothold in the world, the others' nominal.
 
-        The planner picks a spot on the ground while the foot is still at the far end of
-        its swing, but the offset is executed against the hip at *touchdown*, and the
-        body carries the hip forward by `velocity * swing duration` in between. Taking
-        that travel back off the target cancels it, so the foot lands on the patch of
-        ground that was chosen rather than several scan cells past it. This is the
-        opposite sign to the Raibert-style lead a gaited controller would apply, which
-        pushes the foot ahead of the body for balance rather than onto one spot.
+        A footstep commanded since the last step is pinned now: its target is in the hip's
+        yaw frame, so it goes into the world through the hip's position and the heading.
+        The world here is the odometry frame, the base's world velocity integrated as the
+        simulator integrates it (semi-implicit Euler), which is exact over a swing.
+
+        Upstream instead executes the hip-relative target against the hip at touchdown,
+        less a prediction of the body's travel over the swing. That only holds if the
+        velocity is constant and the body neither turns nor tilts, and it landed feet a
+        median 1.5 cm off the commanded foothold (`gaitnet_sim.scripts.landing_error`).
         """
-        travel = linear_velocity[:, None, :2] * self._gait.swing_duration.unsqueeze(-1)
-        # a velocity spike must not throw the target out of the leg's workspace
-        limit = self.model.max_body_travel_compensation
-        travel = travel * (limit / travel.norm(dim=-1, keepdim=True).clamp_min(limit))
+        self._odometry = self._odometry + base_vel[:, :3] * self.dt
+        base_rotation = rotations.quat_to_rotation(base_pose[:, 3:7])
+        # the frame rotation's transpose takes base vectors into the world
+        hips = torch.einsum("nji,lj->nli", base_rotation, self._hip_offsets)
+        targets = torch.einsum("nij,nlj->nli", rotations.rotation_z(yaw), self._footstep_offsets)
+        pinning = self._pin_pending.unsqueeze(-1)
+        self._foothold_world = torch.where(
+            pinning, self._odometry.unsqueeze(1) + hips + targets, self._foothold_world
+        )
+        self._pinned |= self._pin_pending
+        self._pin_pending.zero_()
 
-        offsets = self._footstep_offsets.clone()
-        offsets[..., :2] -= travel
-        return self._hip_offsets + offsets + position.unsqueeze(1)
+        relative = self._foothold_world - self._odometry.unsqueeze(1)
+        aimed = torch.einsum("nij,nlj->nli", base_rotation, relative) - self._hip_offsets
+        return torch.where(self._pinned.unsqueeze(-1), aimed, self._footstep_offsets)
 
     def _track_swing(
         self, swinging: torch.Tensor, swing_phase: torch.Tensor, foot_in_world: torch.Tensor
@@ -373,6 +397,10 @@ class BatchedMpcController:
         self._gait.reset(robot_ids)
         self._mpc.reset(robot_ids)
         self._footstep_offsets[robot_ids] = self._nominal_offsets
+        self._odometry[robot_ids] = 0.0
+        self._foothold_world[robot_ids] = 0.0
+        self._pin_pending[robot_ids] = False
+        self._pinned[robot_ids] = False
         self._feedforward[robot_ids] = 0.0
         self._swing_start[robot_ids] = 0.0
         self._swing_end[robot_ids] = 0.0

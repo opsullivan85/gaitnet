@@ -112,7 +112,9 @@ Stage by stage:
    differentiable in the foothold.
 5. **Select.** See below.
 6. **Command.** `FootstepCommand` carries `active` (false = no step this tick), leg, target
-   in the leg's hip yaw frame, and swing duration.
+   in the leg's hip yaw frame as observed, and swing duration. Whoever executes it pins the
+   target in the world at the observed state and holds it there through the swing (see
+   [the two low-level controllers](#the-two-low-level-controllers)).
 
 Between steps 5 and 6, two optional pieces can run:
 [**refinement**](packages/gaitnet-core/src/gaitnet_core/refine.py), gradient ascent on the
@@ -224,6 +226,21 @@ so "improving" one silently invalidates the comparisons. Torque agreement, cost 
 the handful of intentional differences are in
 [control/README.md](packages/gaitnet-core/src/gaitnet_core/control/README.md). Switching
 between them is a sim2real-relevant change, not a pure speed-up.
+
+Both depart from upstream in one place: a footstep's target is **pinned in the world** on the
+control step after it is commanded, from the state the planner observed, and the swing is
+re-aimed at it from the hip every step. The world is the base's integrated velocity, so
+neither controller needs a position estimate. Upstream instead applied the hip-relative target
+at touchdown less a predicted body travel, which the body's turning, tilt and change of speed
+during the swing threw off: feet landed a median 1.5 cm (p99 3.9 cm) from the commanded
+foothold, 7 mm behind it on average, against 1.5 cm cells and a 2-cell edge margin. Pinned,
+they land a median 7.0 mm off (p99 3.2 cm) with no systematic bias; what is left is swing
+tracking, worst on the shortest swings. Both were measured on flat ground with
+`gaitnet_sim.scripts.landing_error` (the same bundle, CPU pool, 16 robots for 30 s), which is
+also how to check a change here. Bundles
+trained before the pinning learned against the old behaviour. On hardware the robot's
+own controller has to do the same pinning; the
+[ros1 README](packages/gaitnet-ros1/README.md#plannercommand) says how.
 
 ## 2. The two scoring networks
 
