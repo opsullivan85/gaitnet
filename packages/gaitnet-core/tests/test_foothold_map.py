@@ -70,7 +70,7 @@ def test_best_cell_is_the_deterministic_choice():
         if leg < 0:
             continue
         i, j = fmap.best_cells()[r, leg]
-        assert torch.allclose(fmap.grid.cell_centers()[i, j], fmap.target[r, :2])
+        assert torch.allclose(fmap.grid.cell_centers()[leg, i, j], fmap.target[r, :2])
 
 
 def test_map_is_dense_whatever_the_planner_sampled():

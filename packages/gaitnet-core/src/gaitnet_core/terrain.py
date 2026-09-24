@@ -91,8 +91,9 @@ def sample_patch(maps: torch.Tensor, xy: torch.Tensor, grid: FootholdGrid) -> to
     """Bilinear interpolation of per-leg maps over the grid's cells, differentiable in `xy`.
 
     Args:
-        maps: (N, L, C, X, Y) values at the centres of an X x Y block of cells centred on the
-            hip at `grid.resolution`: the terrain patch, the candidate grid, or a size between
+        maps: (N, L, C, X, Y) values at the centres of an X x Y block of cells centred on
+            each leg's grid centre at `grid.resolution`: the terrain patch, the candidate
+            grid, or a size between
         xy: (N, L, K, 2) points in each leg's hip yaw frame (m). Points beyond the outermost
             cell centres take the value at the map's edge.
 
@@ -106,7 +107,8 @@ def sample_patch(maps: torch.Tensor, xy: torch.Tensor, grid: FootholdGrid) -> to
     # grid_sample's coordinates run from -1 to 1 between the first and last cell centres
     # (align_corners=True), and its first coordinate indexes the last dimension (our y)
     half = torch.tensor([size_x - 1, size_y - 1], device=xy.device, dtype=xy.dtype) * (grid.resolution / 2)
-    normalized = (xy / half).flip(-1).reshape(n * l, k, 1, 2)
+    local = xy - grid.leg_centers(xy.device, xy.dtype).unsqueeze(1)
+    normalized = (local / half).flip(-1).reshape(n * l, k, 1, 2)
     sampled = F.grid_sample(
         maps.reshape(n * l, c, size_x, size_y).to(xy.dtype),
         normalized,

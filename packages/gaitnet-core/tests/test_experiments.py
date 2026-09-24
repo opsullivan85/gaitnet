@@ -23,11 +23,17 @@ STATE_DIM = feature_dim(DEFAULT_FEATURES, 4)
 
 
 def patch_centres(grid) -> torch.Tensor:
-    """(X, Y, 2) cell centres of the whole terrain patch, border included."""
+    """(L, X, Y, 2) each leg's cell centres of the whole terrain patch, border included."""
     size_x, size_y = grid.patch_size
     x = (torch.arange(size_x) - (size_x - 1) / 2) * grid.resolution
     y = (torch.arange(size_y) - (size_y - 1) / 2) * grid.resolution
-    return torch.stack(torch.meshgrid(x, y, indexing="ij"), dim=-1)
+    local = torch.stack(torch.meshgrid(x, y, indexing="ij"), dim=-1)
+    return local + grid.leg_centers()[:, None, None]
+
+
+def per_leg(points: torch.Tensor, n: int) -> torch.Tensor:
+    """(L, 2) one point per leg -> (n, L, 1, 2) sample_patch points."""
+    return points.view(1, -1, 1, 2).expand(n, -1, 1, 2)
 
 
 def test_sample_patch_reads_cells_and_interpolates(grid):
@@ -35,28 +41,29 @@ def test_sample_patch_reads_cells_and_interpolates(grid):
     maps = torch.randn(2, 4, 3, *grid.patch_size)
     centres = patch_centres(grid)
     i, j = 5, 17
-    xy = centres[i, j].expand(2, 4, 1, 2)
+    xy = per_leg(centres[:, i, j], 2)
     assert torch.allclose(sample_patch(maps, xy, grid)[:, :, 0], maps[..., i, j], atol=1e-5)
     # halfway to the next cell in x (the first index)
-    midpoint = ((centres[i, j] + centres[i + 1, j]) / 2).expand(2, 4, 1, 2)
+    midpoint = per_leg((centres[:, i, j] + centres[:, i + 1, j]) / 2, 2)
     expected = (maps[..., i, j] + maps[..., i + 1, j]) / 2
     assert torch.allclose(sample_patch(maps, midpoint, grid)[:, :, 0], expected, atol=1e-5)
     # beyond the patch: the edge
-    far = torch.tensor([10.0, 0.0]).expand(2, 4, 1, 2)
-    assert torch.allclose(sample_patch(maps, far, grid)[:, :, 0], maps[..., -1, grid.patch_size[1] // 2], atol=1e-5)
+    middle = grid.patch_size[1] // 2
+    far = per_leg(centres[:, -1, middle] + torch.tensor([10.0, 0.0]), 2)
+    assert torch.allclose(sample_patch(maps, far, grid)[:, :, 0], maps[..., -1, middle], atol=1e-5)
     # maps over the candidate grid only
     inner = torch.randn(2, 4, 3, *grid.size)
-    xy = grid.cell_centers()[3, 20].expand(2, 4, 1, 2)
+    xy = per_leg(grid.cell_centers()[:, 3, 20], 2)
     assert torch.allclose(sample_patch(inner, xy, grid)[:, :, 0], inner[..., 3, 20], atol=1e-5)
 
 
 def test_crop_encoding_reads_terrain_around_the_candidate(grid):
     terrain = torch.full((1, 4, *grid.patch_size), GROUND)
     step_x = grid.patch_size[0] // 2 + 1
-    terrain[..., step_x:, :] = GROUND + 0.05  # a step up just ahead of the hip
+    terrain[..., step_x:, :] = GROUND + 0.05  # a step up just ahead of the grid's centre
     centres = patch_centres(grid)
-    xy = centres[grid.patch_size[0] // 2, grid.patch_size[1] // 2]  # the hip's cell, on the lower side
-    xyz = torch.cat([xy, torch.tensor([GROUND])]).expand(1, 4, 1, 3)
+    xy = centres[:, grid.patch_size[0] // 2, grid.patch_size[1] // 2]  # the centre cell, on the lower side
+    xyz = torch.cat([xy, torch.full((4, 1), GROUND)], dim=-1).view(1, 4, 1, 3)
     encoding = CANDIDATE_FEATURES["xyz_crop"]
     features = encoding.encode(EncoderInputs(xyz, terrain, grid, crop_radius=2))
     assert features.shape == (1, 4, 1, encoding.dim(4, 2)) == (1, 4, 1, 4 + 3 + 25)
@@ -124,7 +131,7 @@ def test_refiner_through_spatial_cnn_under_inference_mode(grid):
     assert torch.equal(refined.is_step, plan.is_step) and torch.equal(refined.leg, plan.leg)
     stepping = refined.is_step
     valid = planner.rules.valid(obs, GO1)
-    cell, in_bounds = grid.xy_to_cell(refined.target[stepping, :2])
+    cell, in_bounds = grid.xy_to_cell(refined.target[stepping, :2], refined.leg[stepping])
     assert in_bounds.all() and valid[stepping.nonzero().squeeze(-1), refined.leg[stepping], cell[:, 0], cell[:, 1]].all()
 
 

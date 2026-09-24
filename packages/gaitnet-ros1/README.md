@@ -74,18 +74,23 @@ second, overlapping footstep.
 
 ### `terrain` (`gaitnet_msgs/TerrainPatch`)
 
-These are terrain heights on a square grid of cells around each hip, one patch per leg,
-each in its hip's yaw frame. For cell (i, j):
+These are terrain heights on a grid of cells near each hip, one patch per leg, each in its
+hip's yaw frame. The patch is centred at (`center_x`, `center_y`) from a left hip and at
+(`center_x`, −`center_y`) from a right hip, so positive `center_y` is outboard on every leg.
+With s = +1 for FL and RL and −1 for FR and RR, for cell (i, j):
 
-- position: x = (i − (size_x − 1) / 2) · resolution, y = (j − (size_y − 1) / 2) · resolution
+- position: x = `center_x` + (i − (size_x − 1) / 2) · resolution,
+  y = s · `center_y` + (j − (size_y − 1) / 2) · resolution
 - value: `heights[(leg · size_x + i) · size_y + j]` is the terrain's height there relative to
   the hip, in m and negative below it (about −0.26 on flat ground at the nominal stance)
 - a cell with no data (unseen, or no return) is `TerrainPatch.UNKNOWN` (−1000). NaN and inf
   can't cross rosbridge's JSON.
 
-The size and resolution are the policy's, and the planner refuses anything else. Current
-bundles use a 25 × 25 grid of 1.5 cm cells plus a 3-cell border of context, so 31 × 31 at
-0.015 m. Sample the elevation map at the cell centres. Don't pre-filter the patch for
+The size, resolution and centre are the policy's, and the planner refuses anything else.
+The defaults are a 25 × 25 grid of 1.5 cm cells plus a 3-cell border of context, so
+31 × 31 at 0.015 m, centred at (0, 0.08) m; bundles trained before the centre existed are
+centred on the hip, (0, 0), which is also what a robot that leaves the centre fields out is
+taken to send. Sample the elevation map at the cell centres. Don't pre-filter the patch for
 steppability: the planner applies its own reach and edge rules.
 
 ## PlannerCommand

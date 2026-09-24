@@ -78,7 +78,8 @@ def bundle_from_run(run_dir: str | Path, checkpoint: str | None = None, extra: d
     if checkpoint is None:
         checkpoint = latest_checkpoint([path.name for path in run_dir.iterdir()])
 
-    contract = GaitNetCfg(**env["gaitnet"])
+    # runs from before the grid had a centre scanned around the hip, not today's default
+    contract = GaitNetCfg(**{"grid_center": (0.0, 0.0), **env["gaitnet"]})
     spec = contract.robot_spec()
     features = tuple(env["observations"]["state"]["robot_state"]["params"]["features"])
     # the planner builds the network's state from the features alone

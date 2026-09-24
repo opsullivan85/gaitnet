@@ -72,6 +72,11 @@ def test_contract_violations_are_refused():
         observation_from_msg(message, FootholdGrid(resolution=0.015, size=(11, 11), border=2))
     with pytest.raises(ContractError, match="terrain patch"):
         observation_from_msg(message, FootholdGrid(resolution=0.02, size=(9, 9), border=2))
+    with pytest.raises(ContractError, match="terrain patch"):
+        observation_from_msg(message, FootholdGrid(resolution=0.015, size=(9, 9), border=2, center=(0.0, 0.08)))
+    # a robot that predates the centre fields scans around the hip
+    legacy = {**message, "terrain": {k: v for k, v in message["terrain"].items() if not k.startswith("center")}}
+    observation_from_msg(legacy, GRID)
     message["state"]["foot_pos"] = message["state"]["foot_pos"][:9]
     with pytest.raises(ContractError, match="foot_pos"):
         observation_from_msg(message, GRID)

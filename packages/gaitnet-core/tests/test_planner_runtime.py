@@ -103,7 +103,7 @@ def test_refine_moves_off_lattice_toward_optimum(grid):
     after = (refined.target[:, :2] - target).norm(dim=-1)
     assert (after < before).all() and (after < 0.3 * grid.resolution).all()
     # refined footholds stay on valid cells
-    cell, in_bounds = grid.xy_to_cell(refined.target[:, :2])
+    cell, in_bounds = grid.xy_to_cell(refined.target[:, :2], refined.leg)
     assert in_bounds.all() and valid[torch.arange(2), refined.leg, cell[:, 0], cell[:, 1]].all()
 
 

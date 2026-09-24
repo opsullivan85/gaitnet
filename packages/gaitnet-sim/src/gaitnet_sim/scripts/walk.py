@@ -97,7 +97,7 @@ def nearest_foothold(term: FootstepControlAction, leg: int, desired_xy: torch.Te
     rules = term._env.cfg.gaitnet.foothold_rules()
     heights = term.terrain().heights
     valid = valid_footholds(heights, term.spec, term.grid, rules.step_threshold, rules.edge_margin)[:, leg]
-    centres = term.grid.cell_centers(desired_xy.device).flatten(0, 1)  # (H W, 2)
+    centres = term.grid.cell_centers(desired_xy.device)[leg].flatten(0, 1)  # (H W, 2)
     distance = (centres.unsqueeze(0) - desired_xy.unsqueeze(1)).square().sum(-1)
     distance = distance.masked_fill(~valid.flatten(1), float("inf"))
     best = distance.argmin(dim=1)

@@ -54,6 +54,11 @@ class FakeRobot:
                     heights.append(TerrainPatch.UNKNOWN if edge else GROUND)
         return heights
 
+    def on_patch(self, leg, target, half):
+        """Whether `target` is within `half` of the leg's patch centre (right legs mirror y)."""
+        side = 1.0 if leg in (0, 2) else -1.0
+        return abs(target[0] - self.args.center_x) <= half and abs(target[1] - side * self.args.center_y) <= half
+
     def swinging(self, leg, now):
         return now < self.swing_end[leg]
 
@@ -70,7 +75,7 @@ class FakeRobot:
             problem = None
             if not 0 <= leg < 4:
                 problem = "leg %d" % leg
-            elif not all(math.isfinite(v) for v in target) or abs(target[0]) > half or abs(target[1]) > half:
+            elif not all(math.isfinite(v) for v in target) or not self.on_patch(leg, target, half):
                 problem = "target %s" % target
             elif not 0.05 < step.duration < 1.0:
                 problem = "duration %.3f" % step.duration
@@ -109,6 +114,8 @@ class FakeRobot:
         state.base_command = list(COMMAND)
         msg.terrain.resolution = self.args.resolution
         msg.terrain.size_x = msg.terrain.size_y = self.args.patch
+        msg.terrain.center_x = self.args.center_x
+        msg.terrain.center_y = self.args.center_y
         msg.terrain.heights = self.heights
         return msg
 
@@ -155,6 +162,10 @@ def main():
     parser.add_argument("--min_answered", type=float, default=0.9)
     parser.add_argument("--patch", type=int, default=31, help="Terrain patch cells per side, border included.")
     parser.add_argument("--resolution", type=float, default=0.015)
+    parser.add_argument("--center_x", type=float, default=0.0, help="Patch centre ahead of each hip (m).")
+    parser.add_argument(
+        "--center_y", type=float, default=0.08, help="Patch centre outboard of each hip (m); 0 for older bundles."
+    )
     args = parser.parse_args(rospy.myargv()[1:])
 
     rospy.init_node("gaitnet_fake_robot")

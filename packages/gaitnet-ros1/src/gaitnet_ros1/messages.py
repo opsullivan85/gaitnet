@@ -51,10 +51,16 @@ def observation_from_msg(
     """A gaitnet_msgs/Observation -> a one-robot Observation on the policy's grid."""
     state, terrain = msg["state"], msg["terrain"]
     size = (int(terrain["size_x"]), int(terrain["size_y"]))
-    if size != grid.patch_size or abs(float(terrain["resolution"]) - grid.resolution) > 1e-6:
+    # a robot built against the message before it had a centre scans around the hip
+    center = (float(terrain.get("center_x", 0.0)), float(terrain.get("center_y", 0.0)))
+    if (
+        size != grid.patch_size
+        or abs(float(terrain["resolution"]) - grid.resolution) > 1e-6
+        or any(abs(a - b) > 1e-6 for a, b in zip(center, grid.center))
+    ):
         raise ContractError(
-            f"terrain patch of {size} cells at {terrain['resolution']} m, the policy's is"
-            f" {grid.patch_size} at {grid.resolution} m"
+            f"terrain patch of {size} cells at {terrain['resolution']} m centred at {center} m, the"
+            f" policy's is {grid.patch_size} at {grid.resolution} m centred at {grid.center} m"
         )
     heights = _tensor(terrain["heights"], (1, num_legs, *size), "terrain.heights", device)
     # the wire's UNKNOWN (and anything non-finite that got through) is core's -inf
@@ -114,6 +120,8 @@ def observation_to_msg(observation: Observation, stamp: dict | None = None, robo
             "resolution": grid.resolution,
             "size_x": grid.patch_size[0],
             "size_y": grid.patch_size[1],
+            "center_x": grid.center[0],
+            "center_y": grid.center[1],
             "heights": _values(heights),
         },
     }

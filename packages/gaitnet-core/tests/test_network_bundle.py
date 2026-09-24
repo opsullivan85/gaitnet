@@ -4,6 +4,7 @@ import torch
 from conftest import make_observation
 from gaitnet_core.bundle import BundleError, PolicyBundle, check_manifest, load_bundle, save_bundle
 from gaitnet_core.features import DEFAULT_FEATURES, feature_dim, state_vector
+from gaitnet_core.grid import FootholdGrid
 from gaitnet_core.networks import CandidateScorer
 from gaitnet_core.planner import FootholdRules
 from gaitnet_core.robot_spec import GO1
@@ -74,6 +75,20 @@ def test_bundle_round_trip(tmp_path):
     b = loaded.planner().plan(obs)
     assert torch.equal(a.selection.index, b.selection.index)
     assert torch.allclose(a.scores.step_logits, b.scores.step_logits)
+
+
+def test_bundle_keeps_the_grid_centre_and_reads_format_2(tmp_path):
+    bundle = _bundle(_network())
+    bundle.grid = FootholdGrid(center=(0.01, 0.08))
+    loaded = load_bundle(save_bundle(tmp_path / "policy.pt", bundle))
+    assert loaded.grid == bundle.grid
+
+    # format 2 had no grid centre: its grids were centred on the hip
+    data = torch.load(save_bundle(tmp_path / "old.pt", _bundle(_network())), weights_only=True)
+    del data["manifest"]["grid"]["center"]
+    data["manifest"]["format_version"] = 2
+    torch.save(data, tmp_path / "old.pt")
+    assert load_bundle(tmp_path / "old.pt").grid.center == (0.0, 0.0)
 
 
 def test_bundle_rejects_mismatches(tmp_path):

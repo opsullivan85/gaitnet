@@ -9,18 +9,35 @@ from gaitnet_core.terrain import valid_footholds
 
 def test_cell_round_trip(grid):
     cells = torch.stack(torch.meshgrid(torch.arange(25), torch.arange(25), indexing="ij"), -1)
-    xy = grid.cell_to_xy(cells)
+    legs = torch.arange(4).view(4, 1, 1)
+    xy = grid.cell_to_xy(cells.expand(4, -1, -1, -1), legs)
     assert torch.allclose(xy, grid.cell_centers(), atol=1e-6)
-    back, in_bounds = grid.xy_to_cell(xy + 0.4 * grid.resolution)
-    assert torch.equal(back, cells) and in_bounds.all()
-    # first index runs along x, centre cell is the hip
-    assert torch.allclose(grid.cell_to_xy(torch.tensor([12, 12])), torch.zeros(2), atol=1e-7)
-    assert grid.cell_to_xy(torch.tensor([24, 12]))[0] > 0
+    back, in_bounds = grid.xy_to_cell(xy + 0.4 * grid.resolution, legs)
+    assert torch.equal(back, cells.expand(4, -1, -1, -1)) and in_bounds.all()
+    # first index runs along x, the centre cell is the grid's centre
+    for leg in range(4):
+        assert torch.allclose(grid.cell_to_xy(torch.tensor([12, 12]), leg), grid.leg_centers()[leg], atol=1e-7)
+        assert grid.cell_to_xy(torch.tensor([24, 12]), leg)[0] > grid.leg_centers()[leg, 0]
+
+
+def test_grid_centres_mirror_outboard():
+    grid = FootholdGrid(center=(0.02, 0.08))
+    # FL, FR, RL, RR: left legs at +y, right legs at -y, all shifted forward alike
+    expected = torch.tensor([[0.02, 0.08], [0.02, -0.08], [0.02, 0.08], [0.02, -0.08]])
+    assert torch.allclose(grid.leg_centers(), expected)
+    # the second index runs to the left on both sides
+    for leg in range(4):
+        assert grid.cell_to_xy(torch.tensor([12, 24]), leg)[1] > grid.leg_centers()[leg, 1]
+    assert FootholdGrid.from_dict(grid.to_dict()) == grid
+    legacy = {key: value for key, value in grid.to_dict().items() if key != "center"}
+    assert FootholdGrid.from_dict(legacy).center == (0.0, 0.0)
 
 
 def test_out_of_bounds(grid):
     half = grid.half_extent[0]
-    _, in_bounds = grid.xy_to_cell(torch.tensor([[half + grid.resolution, 0.0], [0.0, 0.0]]))
+    centre = grid.leg_centers()[1]
+    points = torch.tensor([[half + grid.resolution, 0.0], [0.0, 0.0]]) + centre
+    _, in_bounds = grid.xy_to_cell(points, 1)
     assert in_bounds.tolist() == [False, True]
 
 

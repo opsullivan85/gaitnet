@@ -43,7 +43,8 @@ def _cells_to_candidates(
     offset: torch.Tensor | None = None,
 ) -> Candidates:
     """(N, L, K, 2) cell indices -> Candidates, z from the cell's height."""
-    xy = grid.cell_to_xy(cells)
+    legs = torch.arange(cells.shape[1], device=cells.device).view(-1, 1)
+    xy = grid.cell_to_xy(cells, legs)
     if offset is not None:
         xy = xy + offset
     if heights is None:

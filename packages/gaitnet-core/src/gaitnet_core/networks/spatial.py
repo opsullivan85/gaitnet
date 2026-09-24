@@ -83,8 +83,8 @@ class DenseSpatialCNN(nn.Module):
         # Convolutions spend the patch's border cells as context rather than zero padding
         # their edges, down to the candidate grid; any further ones are padded.
         self.paddings = [0 if i < self.grid.border else 1 for i in range(len(channels))]
-        # The first layer reads the height, plus planes of each cell's x and y (so position
-        # relative to the hip is known) and the leg. Those planes are the same for every
+        # The first layer reads the height, plus planes of each cell's x and y in the grid
+        # and the leg (which together fix its position relative to the hip). Those planes are the same for every
         # robot, so their share of the first convolution is one map per leg, computed once
         # per call (`position_conv`) rather than convolved for every robot.
         self.height_conv = nn.Conv2d(1, channels[0], kernel_size=3, padding=self.paddings[0])

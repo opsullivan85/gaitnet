@@ -44,6 +44,7 @@ FOOTHOLD_GRID = {
     "resolution": _CONTRACT.grid_resolution,
     "size": list(_CONTRACT.grid_size),
     "border": _CONTRACT.grid_border,
+    "center": list(_CONTRACT.grid_center),
 }
 """The env's default foothold grid, which networks that read terrain are built for. A run
 with a different grid needs e.g. `agent.actor.network.grid.resolution=...` too; export

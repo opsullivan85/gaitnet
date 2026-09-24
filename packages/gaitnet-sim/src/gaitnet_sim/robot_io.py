@@ -56,10 +56,19 @@ class RobotIO:
         if len(self.scanners) != spec.num_legs:
             raise ValueError(f"expected one scanner per leg, got {list(scanner_names)}")
         rays = grid.patch_size[0] * grid.patch_size[1]
-        for name, scanner in zip(scanner_names, self.scanners):
+        cells = grid.cell_centers()
+        b = grid.border
+        for leg, (name, scanner) in enumerate(zip(scanner_names, self.scanners)):
             if scanner.num_rays != rays:
                 raise ValueError(
                     f"scanner {name} casts {scanner.num_rays} rays, the foothold grid needs {grid.patch_size}"
+                )
+            starts = scanner.ray_starts.torch[0, :, :2].reshape(*grid.patch_size, 2).cpu()
+            inner = starts[b : b + grid.size[0], b : b + grid.size[1]]
+            if not torch.allclose(inner, cells[leg], atol=1e-4):
+                raise ValueError(
+                    f"scanner {name}'s rays aren't over the foothold grid's cells (centre {grid.center});"
+                    " build it with gaitnet_sim.env.scene.foothold_scanner_cfg"
                 )
 
     @property

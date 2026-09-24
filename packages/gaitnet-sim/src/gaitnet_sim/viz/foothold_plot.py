@@ -2,7 +2,8 @@
 callback that writes it to PNGs as the planner runs. Needs matplotlib, not the simulator.
 
 Panels are laid out as seen from above with the robot facing up (FL top left), each one the
-leg's grid in its hip yaw frame: forward up, left to the left, the hip at the origin.
+leg's grid in its hip yaw frame: forward up, left to the left, the hip at the origin (off the
+grid's centre by `FootholdGrid.center`).
 """
 
 from __future__ import annotations
@@ -59,12 +60,12 @@ def draw_foothold_map(
 ) -> None:
     """Draw robot `index` of `fmap` onto `figure`, replacing whatever was there."""
     figure.clear()
-    axes = figure.subplots(2, 2, sharex=True, sharey=True)
+    # a column is one side's legs, whose grids share their centre's y
+    axes = figure.subplots(2, 2, sharex="col", sharey=True)
     grid = fmap.grid
     half_x, half_y = grid.half_extent
     pad = grid.resolution / 2
-    # left > right: y (left) increases to the left
-    extent = (half_y + pad, -half_y - pad, -half_x - pad, half_x + pad)
+    leg_centers = grid.leg_centers().numpy()
 
     logits = fmap.logits(kind)[index].float().cpu().numpy()
     reachable = fmap.reachable[index].cpu().numpy()
@@ -80,6 +81,9 @@ def draw_foothold_map(
 
     image = None
     for leg, ax in enumerate(axes.flat):
+        cx, cy = leg_centers[leg]
+        # left > right: y (left) increases to the left
+        extent = (cy + half_y + pad, cy - half_y - pad, cx - half_x - pad, cx + half_x + pad)
         image = ax.imshow(
             _as_seen_from_above(logits[leg]), cmap=COLORMAP, vmin=low, vmax=high, extent=extent,
             interpolation="nearest",
@@ -91,7 +95,7 @@ def draw_foothold_map(
 
         ax.plot(0.0, 0.0, "+", color="white", markersize=8, markeredgewidth=1)
         if terrain_ok[leg].any():
-            best_x, best_y = centers[best[leg, 0], best[leg, 1]]
+            best_x, best_y = centers[leg, best[leg, 0], best[leg, 1]]
             ax.plot(best_y, best_x, "o", markerfacecolor="none", markeredgecolor="white", markersize=9, markeredgewidth=1.5)
         if leg == chosen_leg:
             ax.plot(target[1], target[0], "X", markerfacecolor=CHOSEN_COLOR, markeredgecolor="white", markersize=13)

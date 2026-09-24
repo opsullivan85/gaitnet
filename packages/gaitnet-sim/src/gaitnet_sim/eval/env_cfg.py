@@ -40,12 +40,13 @@ def apply_bundle_contract(env_cfg: GaitNetEnvCfg, bundle: PolicyBundle) -> None:
     env_cfg.gaitnet.grid_resolution = grid.resolution
     env_cfg.gaitnet.grid_size = tuple(grid.size)
     env_cfg.gaitnet.grid_border = grid.border
+    env_cfg.gaitnet.grid_center = tuple(grid.center)
     env_cfg.gaitnet.step_threshold = rules.step_threshold
     env_cfg.gaitnet.edge_margin = rules.edge_margin
     env_cfg.gaitnet.min_stance_after_step = rules.min_stance_after_step
     update_period = env_cfg.decimation * env_cfg.sim.dt
-    for name, hip in zip(SCANNER_NAMES, HIP_NAMES):
-        scanner = foothold_scanner_cfg(hip, grid)
+    for leg, (name, hip) in enumerate(zip(SCANNER_NAMES, HIP_NAMES)):
+        scanner = foothold_scanner_cfg(hip, grid, leg)
         scanner.update_period = update_period
         setattr(env_cfg.scene, name, scanner)
 

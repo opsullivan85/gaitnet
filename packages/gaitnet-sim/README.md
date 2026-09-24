@@ -135,8 +135,9 @@ or add a preset.
 The foothold grid (`env.gaitnet.grid_*`) is also baked into the scanners' ray patterns
 (built with the scene cfg) and into networks that read terrain
 (`agent.actor.network.grid`), so changing it takes more than an override. `RobotIO`
-refuses scanners whose ray count doesn't fit the grid, and export refuses a network built
-for another grid, but a changed resolution alone would go unnoticed by the scanners.
+refuses scanners whose rays don't fall on the grid's cells (size, resolution or
+`grid_center`), and export refuses a network built for another grid. `grid_center` is a
+left leg's grid centre from its hip, `(0.0, 0.08)` m by default; right legs mirror it.
 
 `packages/gaitnet-sim/tests/test_presets.py` checks that these recipes resolve as
 described.

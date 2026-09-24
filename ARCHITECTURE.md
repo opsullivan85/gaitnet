@@ -58,7 +58,7 @@ Three things must agree between whoever produced a policy and whoever runs it: t
 
 | Piece | Default (Go1) | Where it also appears |
 | --- | --- | --- |
-| Grid | 25 x 25 cells at 0.015 m per leg, border 3 → 31 x 31 patch | `gaitnet_sim.env.contract`, the ray patterns in `gaitnet_sim.env.scene` |
+| Grid | 25 x 25 cells at 0.015 m per leg, border 3 → 31 x 31 patch, centred 0.08 m outboard of each hip | `gaitnet_sim.env.contract`, the ray patterns in `gaitnet_sim.env.scene`, `TerrainPatch.msg` |
 | Reach band | foothold 0.38 m to 0.12 m below the hip | `valid_footholds` |
 | Edge rule | 0.02 m step between neighbours is an edge; 2 cells of margin | needs `border >= edge_margin + 1` |
 | Leg rule | a leg may lift off only if 2 legs stay in scheduled stance | `eligibility.py` |
@@ -66,6 +66,15 @@ Three things must agree between whoever produced a policy and whoever runs it: t
 
 The border exists so rules and convolutions see real terrain at the grid's edge instead of
 padding. Candidates only ever come from the inner 25 x 25.
+
+Each leg's grid sits at `FootholdGrid.center` from its hip, `(0.0, 0.08)` m by default, with y
+mirrored on the right legs so it is outboard on all four: 0.08 m is the Go1's abduction link,
+where a vertical leg's foot hangs, so the grid spans 0.10 m inboard to 0.26 m outboard of the
+hip rather than straddling it. Only the cells move. Candidates, footstep targets and terrain
+heights are all still in the hip's yaw frame, so the controllers, the pinning and the robot's
+`FootstepCommand` handling don't know about the centre; the scanners, `TerrainPatch` and
+anything that turns a cell index into a position (`FootholdGrid.cell_to_xy`, `sample_patch`)
+do. Bundles from before the centre existed (format 2) load as centred on the hip.
 
 A policy bundle records all of it and `load_bundle` validates the manifest against the code,
 so a policy cannot silently run on a different state layout or grid than it was trained on.
@@ -214,7 +223,8 @@ unmasked scoring pass for the watched robots only, plus the reach and edge masks
 plan's choice) as PNG heatmaps
 ([gaitnet_sim/viz](packages/gaitnet-sim/src/gaitnet_sim/viz/__init__.py)). `FORMAT_VERSION` in [bundle.py](packages/gaitnet-core/src/gaitnet_core/bundle.py) is
 bumped when the *format* changes; a change to features, grid or network arguments invalidates
-existing bundles without a bump, and loading will say so.
+existing bundles without a bump, and loading will say so. It is 3 since the grid gained its
+centre; format 2 still loads, its grid centred on the hip.
 
 ### The two low-level controllers
 

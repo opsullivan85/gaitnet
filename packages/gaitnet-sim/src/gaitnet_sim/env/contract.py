@@ -28,6 +28,9 @@ class GaitNetCfg:
     """Foothold cells per leg along (x, y)."""
     grid_border: int = 3
     """Extra terrain cells scanned on each side, context for the edge margin."""
+    grid_center: tuple[float, float] = (0.0, 0.08)
+    """(x, y) of a left leg's grid centre from its hip, in the hip's yaw frame (m); right legs
+    mirror y. 0.08 m outboard is the Go1's abduction link, where a vertical leg's foot is."""
 
     step_threshold: float = 0.02
     """Height difference between neighbouring cells that counts as an edge (m)."""
@@ -41,7 +44,10 @@ class GaitNetCfg:
 
     def foothold_grid(self) -> FootholdGrid:
         return FootholdGrid(
-            resolution=self.grid_resolution, size=tuple(self.grid_size), border=self.grid_border
+            resolution=self.grid_resolution,
+            size=tuple(self.grid_size),
+            border=self.grid_border,
+            center=tuple(self.grid_center),
         )
 
     def foothold_rules(self) -> FootholdRules:

@@ -31,9 +31,9 @@ def make_observation(n: int = 3, grid: FootholdGrid | None = None, height: float
     return Observation(make_state(n), TerrainPatch(heights, grid))
 
 
-@pytest.fixture
-def grid() -> FootholdGrid:
-    return FootholdGrid()
+@pytest.fixture(params=[(0.0, 0.0), (0.02, 0.08)], ids=["on_hip", "offset"])
+def grid(request) -> FootholdGrid:
+    return FootholdGrid(center=request.param)
 
 
 @pytest.fixture

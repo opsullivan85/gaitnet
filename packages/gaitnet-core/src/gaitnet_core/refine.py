@@ -25,9 +25,9 @@ from gaitnet_core.terrain import inner_heights
 
 def _lookup(cells_valid: torch.Tensor, heights: torch.Tensor | None, grid: FootholdGrid, rows, leg, xy):
     """Validity and height of the cell under each point. xy: (N, S, 2)"""
-    cell, in_bounds = grid.xy_to_cell(xy)
     r = rows.unsqueeze(-1)
     l = leg.unsqueeze(-1)
+    cell, in_bounds = grid.xy_to_cell(xy, l)
     ok = cells_valid[r, l, cell[..., 0], cell[..., 1]] & in_bounds
     z = heights[r, l, cell[..., 0], cell[..., 1]] if heights is not None else torch.zeros_like(xy[..., 0])
     return ok, z

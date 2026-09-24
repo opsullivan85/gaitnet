@@ -25,7 +25,9 @@ from gaitnet_core.planner import FootholdRules, FootstepPlanner
 from gaitnet_core.robot_spec import ROBOTS, RobotSpec
 from gaitnet_core.samplers import CandidateSampler, make_sampler
 
-FORMAT_VERSION = 2
+FORMAT_VERSION = 3
+READABLE_VERSIONS = (2, 3)
+"""Format 2 bundles predate `FootholdGrid.center`; their grid reads as centred on the hip."""
 
 
 class BundleError(ValueError):
@@ -89,8 +91,8 @@ def save_bundle(path: str | Path, bundle: PolicyBundle) -> Path:
 
 def check_manifest(manifest: dict) -> None:
     """Raise BundleError if this code can't run the policy the manifest describes."""
-    if manifest.get("format_version") != FORMAT_VERSION:
-        raise BundleError(f"bundle format {manifest.get('format_version')}, this code reads {FORMAT_VERSION}")
+    if manifest.get("format_version") not in READABLE_VERSIONS:
+        raise BundleError(f"bundle format {manifest.get('format_version')}, this code reads {READABLE_VERSIONS}")
     if manifest["actor"]["class"] not in NETWORKS:
         raise BundleError(f"unknown network class {manifest['actor']['class']}")
     if manifest["robot"] not in ROBOTS:
