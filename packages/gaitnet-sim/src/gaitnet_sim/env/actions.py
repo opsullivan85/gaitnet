@@ -5,7 +5,8 @@ duration), the concrete footstep it resolves to, and a velocity command nudge. T
 reads only the footstep and nudge, so it never needs the candidate set.
 
 The term owns the controller. Observation and reward terms reach the controller, the
-nudged command and the robot's state through it (`footstep_action(env)`). Its cfg is in
+nudged command and the robot's state through it (`footstep_action(env)`). It also keeps the
+per-episode gait statistics of the training log (`gaitnet_sim.env.metrics`). Its cfg is in
 `gaitnet_sim.env.actions_cfg`, which names this class by string so task cfgs import
 without the simulator.
 """
@@ -24,6 +25,7 @@ from gaitnet_core import action_layout
 from gaitnet_core.action_layout import EnvAction
 from gaitnet_core.interfaces import FootstepCommand, LowLevelController
 from gaitnet_core.state import Observation, RobotState, TerrainPatch
+from gaitnet_sim.env.metrics import GaitMetrics
 from gaitnet_sim.env.noise import corrupt
 from gaitnet_sim.robot_io import RobotIO
 
@@ -61,6 +63,7 @@ class FootstepControlAction(ActionTerm):
         self._nudge = torch.zeros(self.num_envs, 3, device=self.device)
         self._footsteps = FootstepCommand.none(self.num_envs, device=self.device)
         self._planner_observation: Observation | None = None
+        self._metrics = GaitMetrics(self.io, self.spec, env.step_dt)
 
     def __del__(self):
         controller = getattr(self, "controller", None)
@@ -134,6 +137,7 @@ class FootstepControlAction(ActionTerm):
         self._footsteps.duration[:] = torch.where(footsteps.active, footsteps.duration.clamp(low, high), 0.0)
         if self.cfg.apply_nudge:
             self._nudge[:] = action.nudge
+        self._metrics.record(self._footsteps, self._nudge)
         self.controller.command_footsteps(self._footsteps)
 
     def apply_actions(self):
@@ -148,6 +152,8 @@ class FootstepControlAction(ActionTerm):
             ids = torch.arange(self.num_envs, device=self.device)
         else:
             ids = torch.as_tensor(env_ids, device=self.device, dtype=torch.long)
+        # the action manager drops what its terms' reset returns, so the metrics go in directly
+        self._env.extras.setdefault("log", {}).update(self._metrics.pop(ids))
         self._raw_actions[ids] = 0.0
         self._nudge[ids] = 0.0
         self._footsteps.active[ids] = False

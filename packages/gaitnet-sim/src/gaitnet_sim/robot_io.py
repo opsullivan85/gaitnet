@@ -104,18 +104,31 @@ class RobotIO:
         )
         foot_vel = math_utils.quat_apply_inverse(base_quat.unsqueeze(1).expand(-1, num_legs, -1), foot_vel_w)
 
-        forces = self.contact_sensor.data.net_normal_forces_w.torch[:, self.contact_ids]
         return RobotState(
             foot_pos=foot_pos,
             foot_vel=foot_vel,
             base_lin_vel=data.root_link_lin_vel_b.torch,
             base_ang_vel=data.root_link_ang_vel_b.torch,
             projected_gravity=data.projected_gravity_b.torch,
-            contact=forces.norm(dim=-1) > self.contact_threshold,
+            contact=self.foot_contact(),
             gait_timing=gait_timing,
             command=command,
             base_command=base_command,
         )
+
+    def foot_contact(self) -> torch.Tensor:
+        """(N, L) bool, whether each foot's normal force exceeds `contact_threshold`."""
+        forces = self.contact_sensor.data.net_normal_forces_w.torch[:, self.contact_ids]
+        return forces.norm(dim=-1) > self.contact_threshold
+
+    def foot_pos_hip(self) -> torch.Tensor:
+        """(N, L, 3) each foot in its hip's yaw frame (m), the frame footstep targets are in.
+        The hips are the scanner origins `terrain()` measures heights from."""
+        data = self.robot.data
+        hips_w = torch.stack([scanner.data.pos_w.torch for scanner in self.scanners], dim=1)
+        offset_w = data.body_link_pos_w.torch[:, self.foot_ids] - hips_w
+        yaw = math_utils.yaw_quat(data.root_link_quat_w.torch).unsqueeze(1).expand(-1, offset_w.shape[1], -1)
+        return math_utils.quat_apply_inverse(yaw, offset_w)
 
     def foot_heights(self) -> torch.Tensor:
         """(N, L) each foot's height relative to its hip (m), vertical, as `terrain()` measures
