@@ -42,7 +42,7 @@
             "label": "Run: eval sweep",
             "detail": "Full sweep, recorded in MLflow under the bundle's training run.",
             "type": "shell",
-            "command": "docker compose -f docker/compose.yaml run --rm ${input:livestream} -m gaitnet_sim.scripts.eval_sweep --bundle ${input:bundlePath} --task ${input:evalTask} ${input:evalVariant} --mlflow_run=${input:mlflowRunOverride} --terrain_length 2.0 presets=gpu_mpc"
+            "command": "V=\"${input:evalVelocities}\"; docker compose -f docker/compose.yaml run --rm ${input:livestream} -m gaitnet_sim.scripts.eval_sweep --bundle ${input:bundlePath} --task ${input:evalTask} ${input:evalVariant} --mlflow_run=${input:mlflowRunOverride} ${=${V:+--velocities $V}} --terrain_length 2.0 presets=gpu_mpc"
         },
         {
             "label": "Run: eval sweep (quick check)",
@@ -217,6 +217,12 @@
                 { "label": "--refine --randomize", "value": "--refine --randomize" },
                 { "label": "--no_observers", "value": "--no_observers" }
             ],
+            "default": "--randomize"
+        },
+        {
+            "id": "evalVelocities",
+            "type": "promptString",
+            "description": "Velocities to sweep, space-separated m/s, e.g. '0.1 0.2' (blank: module default 0.05 0.1 0.15 0.2)",
             "default": ""
         },
         {

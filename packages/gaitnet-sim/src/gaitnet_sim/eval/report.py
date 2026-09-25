@@ -23,16 +23,19 @@ def _mean(values: list[float]) -> float:
 
 def cells(rows: Rows, step_dt: float) -> dict[tuple[float, float], dict[str, float]]:
     """Per (difficulty, velocity): `survival` (fraction that reached the time limit) and
-    `distance_ratio`, the mean of distance walked over distance commanded (velocity times the
-    time the robot's episode lasted, `steps * step_dt` seconds)."""
+    `speed`, the mean over robots of the velocity actually achieved (m/s): distance walked over
+    the time it took. A robot that fell early is judged over the time it was up, and one that
+    never moved counts as 0. The last step of an episode is not in the distance (the env has
+    already reset by then), so it is not in the time either; a robot that ended on its first
+    step has no speed and is left out."""
     grouped: dict[tuple[float, float], list[dict]] = defaultdict(list)
     for row in rows:
         grouped[(row["difficulty"], row["velocity"])].append(row)
     return {
         key: {
             "survival": _mean([float(row["truncated"]) for row in group]),
-            "distance_ratio": _mean(
-                [row["distance"] / (key[1] * row["steps"] * step_dt) for row in group if row["steps"] > 0]
+            "speed": _mean(
+                [row["distance"] / ((row["steps"] - 1) * step_dt) for row in group if row["steps"] > 1]
             ),
         }
         for key, group in sorted(grouped.items())
@@ -42,14 +45,14 @@ def cells(rows: Rows, step_dt: float) -> dict[tuple[float, float], dict[str, flo
 def summarize(rows: Rows, step_dt: float) -> dict[str, float]:
     """The metrics logged to MLflow, keyed by name.
 
-    `survival_mean` and `distance_ratio_mean` average the cells (see module docstring),
-    `survival/d<difficulty>_v<velocity>` and `distance_ratio/d<...>_v<...>` are the cells, and
+    `survival_mean` and `speed_mean` average the cells (see module docstring),
+    `survival/d<difficulty>_v<velocity>` and `speed/d<...>_v<...>` are the cells, and
     `terminated/<term>` is the fraction of all robots ended by each termination (`truncated`
     for the time limit)."""
     per_cell = cells(rows, step_dt)
     metrics = {
         "survival_mean": _mean([cell["survival"] for cell in per_cell.values()]),
-        "distance_ratio_mean": _mean([cell["distance_ratio"] for cell in per_cell.values()]),
+        "speed_mean": _mean([cell["speed"] for cell in per_cell.values()]),
     }
     for (difficulty, velocity), cell in per_cell.items():
         for name, value in cell.items():
@@ -60,7 +63,9 @@ def summarize(rows: Rows, step_dt: float) -> dict[str, float]:
 
 
 def plot(rows: Rows, step_dt: float, title: str = ""):
-    """Survival and distance ratio against terrain difficulty, a line per commanded velocity.
+    """Survival and achieved speed against terrain difficulty, a line per commanded velocity.
+    Each velocity's command is drawn dashed on the speed axis in the same color, so the gap is
+    the shortfall.
 
     Returns a matplotlib Figure."""
     import matplotlib
@@ -75,18 +80,21 @@ def plot(rows: Rows, step_dt: float, title: str = ""):
     colors = plt.cm.plasma([i / max(len(velocities) - 1, 1) for i in range(len(velocities))])
 
     fig, axes = plt.subplots(1, 2, figsize=(11, 4))
-    for ax, name, label in zip(axes, ("survival", "distance_ratio"), ("Success rate", "Distance / commanded")):
+    for ax, name, label in zip(axes, ("survival", "speed"), ("Success rate", "Achieved speed (m/s)")):
         for velocity, color in zip(velocities, colors):
             xs = [d for d in difficulties if (d, velocity) in per_cell]
             ys = [per_cell[(d, velocity)][name] for d in xs]
             ax.plot(xs, ys, marker="o", linewidth=2, markersize=6, color=color, label=f"{velocity:g} m/s")
             if name == "survival":
                 ax.fill_between(xs, ys, alpha=0.2, color=color)
+            else:
+                ax.axhline(velocity, linestyle="--", linewidth=1, color=color, alpha=0.6)
         ax.set_xlabel("Terrain difficulty")
         ax.set_ylabel(label)
         ax.set_xticks(difficulties)
         ax.xaxis.set_major_formatter(PercentFormatter(xmax=1, decimals=0))
-        ax.yaxis.set_major_formatter(PercentFormatter(xmax=1, decimals=0))
+        if name == "survival":
+            ax.yaxis.set_major_formatter(PercentFormatter(xmax=1, decimals=0))
         ax.grid(True, alpha=0.3)
     axes[0].set_ylim(-0.05, 1.05)
     axes[1].legend(title="Command velocity", loc="best")

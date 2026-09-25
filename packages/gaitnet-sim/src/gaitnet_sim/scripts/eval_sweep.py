@@ -15,8 +15,8 @@ difficulty, velocity, trial, env, distance (m walked along +x before the robot's
 episode ended), steps, truncated, terminated_by.
 
 The result is also recorded in MLflow as a run nested under the training run the bundle came
-from (`--mlflow_run` overrides which), with the settings as params, survival and distance
-ratio per difficulty and velocity as metrics (`gaitnet_sim.eval.report`), and the CSV and a
+from (`--mlflow_run` overrides which), with the settings as params, survival and achieved
+speed per difficulty and velocity as metrics (`gaitnet_sim.eval.report`), and the CSV and a
 plot as artifacts. A bundle that names no run is refused before the sweep starts.
 
 Trailing key=value arguments are Hydra overrides of the env cfg.

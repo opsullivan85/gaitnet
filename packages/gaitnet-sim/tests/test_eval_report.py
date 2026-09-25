@@ -23,19 +23,25 @@ def _row(difficulty, velocity, distance, steps, truncated, terminated_by=""):
 
 
 ROWS = [
-    # d=0: both survive; commanded 0.1 m/s * 10 steps * 0.5 s = 0.5 m, walked 0.5 and 0.25
-    _row(0.0, 0.1, 0.5, 10, 1),
-    _row(0.0, 0.1, 0.25, 10, 1),
-    # d=0.2: one survives, one falls after 4 steps having walked 0.1 m (0.2 m commanded)
-    _row(0.2, 0.1, 0.5, 10, 1),
-    _row(0.2, 0.1, 0.1, 4, 0, "bad_height"),
+    # the distance covers every step but the last (the env has reset by then), so 10 steps is
+    # 4.5 s of walking. d=0: both survive, walking 0.45 and 0.225 m: 0.1 and 0.05 m/s
+    _row(0.0, 0.1, 0.45, 10, 1),
+    _row(0.0, 0.1, 0.225, 10, 1),
+    # d=0.2: one survives, one falls at step 4 (1.5 s up) having walked 0.15 m: 0.1 m/s
+    _row(0.2, 0.1, 0.0, 10, 1),
+    _row(0.2, 0.1, 0.15, 4, 0, "bad_height"),
 ]
 
 
 def test_cells():
     per_cell = report.cells(ROWS, STEP_DT)
-    assert per_cell[(0.0, 0.1)] == {"survival": 1.0, "distance_ratio": pytest.approx(0.75)}
-    assert per_cell[(0.2, 0.1)] == {"survival": 0.5, "distance_ratio": pytest.approx(0.75)}
+    assert per_cell[(0.0, 0.1)] == {"survival": 1.0, "speed": pytest.approx(0.075)}
+    assert per_cell[(0.2, 0.1)] == {"survival": 0.5, "speed": pytest.approx(0.05)}
+
+
+def test_robot_that_never_moves_counts_as_zero_and_first_step_ends_are_skipped():
+    rows = [_row(0.0, 0.1, 0.0, 10, 1), _row(0.0, 0.1, 0.3, 4, 0, "bad_height"), _row(0.0, 0.1, 9.0, 1, 0)]
+    assert report.cells(rows, STEP_DT)[(0.0, 0.1)]["speed"] == pytest.approx(0.1)
 
 
 def test_summary_averages_cells_not_robots():
@@ -55,7 +61,8 @@ def test_plot_has_a_line_per_velocity():
     rows = ROWS + [_row(0.0, 0.2, 1.0, 10, 1), _row(0.2, 0.2, 0.2, 5, 0, "bad_height")]
     fig = report.plot(rows, STEP_DT, title="t")
     assert len(fig.axes) == 2
-    assert all(len(ax.get_lines()) == 2 for ax in fig.axes)
+    assert len(fig.axes[0].get_lines()) == 2
+    assert len(fig.axes[1].get_lines()) == 4  # a line and a dashed command per velocity
 
 
 def test_eval_run_is_nested_in_the_training_runs_experiment(tmp_path, monkeypatch):

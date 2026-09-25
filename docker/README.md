@@ -59,7 +59,7 @@ docker compose -f docker/compose.yaml run --rm sim -m gaitnet_sim.scripts.export
     --run logs/rsl_rl/gaitnet_holes/<timestamp> --out data/bundles/policy.pt
 
 # evaluate a bundle across terrain difficulties and velocities (writes data/evaluations/*.csv
-# and records survival, distance ratio and a plot in MLflow, as a run nested under the
+# and records survival, achieved speed and a plot in MLflow, as a run nested under the
 # training run the bundle came from; --mlflow_run picks another, and a bundle from a run
 # directory that predates mlflow_run_id.txt needs it)
 docker compose -f docker/compose.yaml run --rm sim -m gaitnet_sim.scripts.eval_sweep --bundle data/bundles/policy.pt \
