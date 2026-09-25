@@ -12,16 +12,23 @@ Presets (`presets=<name>[,<name>...]`), each matched by the env cfg's observatio
 - slowdown: the actor runs the step-confidence slowdown observer, reading base_command
 - redirect: the actor runs the blocked-leg redirect observer, reading base_command and footholds
 - slowdown_redirect: both observers, their nudges summed
+- symmetry: left/right mirror augmentation of every PPO minibatch (`gaitnet_sim.rl.symmetry`)
 """
 
 from __future__ import annotations
 
 from isaaclab.utils import configclass
 
-from isaaclab_rl.rsl_rl import RslRlMLPModelCfg, RslRlOnPolicyRunnerCfg, RslRlPpoAlgorithmCfg
+from isaaclab_rl.rsl_rl import (
+    RslRlMLPModelCfg,
+    RslRlOnPolicyRunnerCfg,
+    RslRlPpoAlgorithmCfg,
+    RslRlSymmetryCfg,
+)
 from isaaclab_tasks.utils import preset
 
 from gaitnet_sim.env.contract import GaitNetCfg
+from gaitnet_sim.rl import symmetry
 
 
 class WriterCfg(dict):
@@ -75,6 +82,14 @@ DENSE_SPATIAL_CNN = {
 }
 SLOWDOWN_OBSERVERS = {"step_confidence_slowdown": {"patience": 10, "margin": 0.0, "scale": 0.5}}
 REDIRECT_OBSERVERS = {"blocked_leg_redirect": {"full_fraction": 1.0, "push": 0.0}}
+MIRROR_AUGMENTATION = RslRlSymmetryCfg(
+    use_data_augmentation=True,
+    use_mirror_loss=False,
+    data_augmentation_func=symmetry.augment,
+    mirror_loss_coeff=0.0,
+)
+"""The `symmetry` preset's settings. `use_data_augmentation=False` keeps only the logged
+`symmetry` metric; `use_mirror_loss=True` with a `mirror_loss_coeff` adds the mirror loss."""
 
 
 @configclass
@@ -114,6 +129,7 @@ class GaitNetPpoRunnerCfg(RslRlOnPolicyRunnerCfg):
     actor = GaitNetActorCfg()
     critic = RslRlMLPModelCfg(hidden_dims=[64] * 6, activation="relu", obs_normalization=False)
     algorithm = RslRlPpoAlgorithmCfg(
+        class_name=preset(default="PPO", symmetry=symmetry.SymmetricPPO),
         value_loss_coef=0.5,
         use_clipped_value_loss=True,
         clip_param=0.3,
@@ -126,6 +142,7 @@ class GaitNetPpoRunnerCfg(RslRlOnPolicyRunnerCfg):
         lam=0.95,
         desired_kl=0.01,  # only used by schedule="adaptive"
         max_grad_norm=1.0,
+        symmetry_cfg=preset(default=None, symmetry=MIRROR_AUGMENTATION),
     )
     logger = WriterCfg(class_name="gaitnet_sim.rl.mlflow_writer.MlflowLogWriter", experiment_name="gaitnet")
 

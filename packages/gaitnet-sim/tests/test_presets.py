@@ -83,6 +83,50 @@ def test_gpu_mpc_preset_swaps_the_controller():
     assert env.actions.footstep.controller.solver_iterations == 120
 
 
+def test_symmetry_preset_selects_mirror_augmentation():
+    from rsl_rl.utils import resolve_callable
+
+    from gaitnet_sim.rl.symmetry import SymmetricPPO, augment
+
+    _, agent = resolve()
+    assert agent.algorithm.class_name == "PPO" and agent.algorithm.symmetry_cfg is None
+
+    _, agent = resolve("presets=symmetry,privileged")
+    symmetry = agent.algorithm.symmetry_cfg
+    assert symmetry.use_data_augmentation and not symmetry.use_mirror_loss
+    assert agent.obs_groups["critic"] == ["state", "privileged"]
+    # what the runner hands RSL-RL
+    algorithm = agent.to_dict()["algorithm"]
+    assert resolve_callable(algorithm["class_name"]) is SymmetricPPO
+    assert resolve_callable(algorithm["symmetry_cfg"]["data_augmentation_func"]) is augment
+
+    _, agent = resolve(
+        "presets=symmetry",
+        "agent.algorithm.symmetry_cfg.use_mirror_loss=True",
+        "agent.algorithm.symmetry_cfg.mirror_loss_coeff=0.1",
+    )
+    assert agent.algorithm.symmetry_cfg.use_mirror_loss and agent.algorithm.symmetry_cfg.mirror_loss_coeff == 0.1
+
+    _, agent = resolve("presets=symmetry", "agent.algorithm.symmetry_cfg.use_data_augmentation=False")
+    assert not agent.algorithm.symmetry_cfg.use_data_augmentation
+
+
+def test_every_observation_term_has_a_mirror():
+    """Symmetry augmentation mirrors every group the env has, so a new term needs a mirror."""
+    from isaaclab.managers import ObservationTermCfg
+
+    from gaitnet_sim.rl.symmetry import TERM_MIRRORS
+
+    env, _ = resolve("presets=spatial,privileged,slowdown_redirect")
+    groups = {name: group for name, group in vars(env.observations).items() if group is not None}
+    assert set(groups) == {"state", "candidates", "terrain", "privileged", "base_command", "footholds"}
+    for name, group in groups.items():
+        terms = {term_name: term for term_name, term in vars(group).items() if isinstance(term, ObservationTermCfg)}
+        assert terms, name
+        for term_name, term in terms.items():
+            assert term.func in TERM_MIRRORS, f"{name}.{term_name}"
+
+
 def test_readme_override_recipes():
     """The recipes in packages/gaitnet-sim/README.md resolve as documented."""
     # Isaac Lab 3 applies env./agent. overrides itself, as Python literals

@@ -343,6 +343,7 @@ rollout buffer.
 | `slowdown_redirect` | `base_command` and `footholds` groups on, actor runs both observers | both of the above |
 | [`swing_duration_ablation`](#swing_duration_ablation) | actor → `CandidateScorer` with `fixed_duration=0.25` | does the network need to choose the swing duration? |
 | [`gpu_mpc`](#gpu_mpc) | action term's controller → `BatchedMpcController` | large env counts |
+| [`symmetry`](#symmetry) | PPO → `SymmetricPPO`, `symmetry_cfg` → mirror augmentation | left/right symmetric policies |
 
 ### `spatial`
 
@@ -480,6 +481,41 @@ in the repo was produced against the CPU pool — compare a policy trained under
 the other before trusting a result that crosses them. More solver iterations narrow the gap:
 `presets=gpu_mpc env.actions.footstep.controller.solver_iterations=100`.
 
+### `symmetry`
+
+| | |
+| --- | --- |
+| Agent | `algorithm.class_name` = `SymmetricPPO`, `algorithm.symmetry_cfg` = `MIRROR_AUGMENTATION` ([agent_cfg.py](packages/gaitnet-sim/src/gaitnet_sim/rl/agent_cfg.py)) |
+| Cost | PPO's update doubles: 7.3 → 14.7 s per iteration with the default scorer, 29.6 → 59.7 s with `spatial` (512 envs x 250 steps); a whole `gpu_mpc,privileged` iteration 40.3 → 47.7 s |
+
+The robot and task are symmetric under the mirror y → -y with FL ↔ FR and RL ↔ RR, and
+RSL-RL's symmetry extension (Mittal et al., ICRA 2024) exploits it by appending each PPO
+minibatch's mirror image. The mirrored half reuses the original's advantages, returns and
+old log-probabilities, so it only makes sense because the environment's dynamics and
+rewards are symmetric too.
+
+What a mirror image is lives in [gaitnet_core/symmetry.py](packages/gaitnet-core/src/gaitnet_core/symmetry.py):
+vectors flip y, angular velocities x and z, commands vy and yaw rate; per-leg tensors swap
+sides; per-leg grid maps (terrain patches, masks) also flip their y axis, which is exact
+because the right legs' grid is the left legs' mirrored. Every `Feature` declares its own
+mirror signs, so the state vector mirrors for any feature list. Candidates keep their slot
+on the mirrored leg, so the action is remapped block by block and the no-op stays put.
+Because the candidate set is part of the observation, this is all the discrete action space
+needs: `GaitNetActor` scores the mirrored choice on the mirrored candidates unchanged. The
+sim side ([gaitnet_sim/rl/symmetry.py](packages/gaitnet-sim/src/gaitnet_sim/rl/symmetry.py))
+mirrors each observation group term by term.
+
+RSL-RL's mirror loss compares actor outputs by MSE, which for this actor are encoded
+choices. `SymmetricPPO` swaps in `MirrorSymmetry`, whose loss (and the `symmetry` metric it
+always logs) is the policy KL between the mirrored policy and the policy at the mirrored
+observation, reusing `GaitNetActor.get_kl_divergence`. With augmentation it is free: PPO has
+already evaluated both halves. `agent.algorithm.symmetry_cfg.use_data_augmentation=False`
+keeps only the metric, training otherwise unchanged; `use_mirror_loss=True` with a
+`mirror_loss_coeff` adds the loss.
+
+**Gotcha.** Only left/right. ANYmal's Isaac Lab example also mirrors front/back, but the
+Go1's knees all bend backwards, so it isn't front/back symmetric.
+
 ### Composing and overriding
 
 Presets are resolved by name across every `preset(...)` field, so ones that touch disjoint
@@ -499,7 +535,8 @@ preset:
 
 | Want | Add to |
 | --- | --- |
-| A state feature | `gaitnet_core.features.FEATURES` |
+| A state feature | `gaitnet_core.features.FEATURES`, with its left/right `mirror` signs |
+| An observation term | its mirror in `gaitnet_sim.rl.symmetry.TERM_MIRRORS` too (a test checks every group's terms) |
 | A candidate encoding | `gaitnet_core.networks.CANDIDATE_FEATURES` |
 | A scoring network | `gaitnet_core.networks.NETWORKS` — takes `(state, candidates, terrain)`, returns `Scores`, sets `uses_terrain` if it reads terrain, exposes `self.config` |
 | A candidate sampler | `gaitnet_core.samplers.SAMPLERS` |

@@ -129,12 +129,8 @@ class GaitNetActor(nn.Module):
         update calls this again on stored observations, with gradients, only to recompute
         log-probabilities, and that must not advance the observers' memory.
         """
-        state = torch.cat([obs[group] for group in self.state_groups], dim=-1)
-        candidates = Candidates.unpack(obs[self.candidates_group])
-        terrain = obs[self.terrain_group] if self.terrain_group is not None else None
-        scores = self.network(state, candidates, terrain)
-        fixed = getattr(self.network, "fixed_duration", None) is not None
-        self.distribution = FootstepDistribution(scores, candidates, None if fixed else self.duration_std)
+        self.distribution = self.distribution_for(obs)
+        scores, candidates = self.distribution.scores, self.distribution.candidates
         selection = self.distribution.sample() if stochastic_output else self.distribution.deterministic()
         nudge = None
         if self.observers and not torch.is_grad_enabled():
@@ -142,6 +138,16 @@ class GaitNetActor(nn.Module):
             plan = plan_from_scores(scores, candidates, selection, footholds)
             nudge = combined_nudge(self.observers, plan, obs[self.base_command_group]).command_delta
         return encode_selection(selection, candidates, nudge)
+
+    def distribution_for(self, obs: TensorDict) -> FootstepDistribution:
+        """The policy at `obs`, without acting: no sample, no observers, and the model's
+        `distribution` left as it was."""
+        state = torch.cat([obs[group] for group in self.state_groups], dim=-1)
+        candidates = Candidates.unpack(obs[self.candidates_group])
+        terrain = obs[self.terrain_group] if self.terrain_group is not None else None
+        scores = self.network(state, candidates, terrain)
+        fixed = getattr(self.network, "fixed_duration", None) is not None
+        return FootstepDistribution(scores, candidates, None if fixed else self.duration_std)
 
     def _require_distribution(self) -> FootstepDistribution:
         if self.distribution is None:
@@ -170,7 +176,10 @@ class GaitNetActor(nn.Module):
     @property
     def output_distribution_params(self) -> tuple[torch.Tensor, ...]:
         """(log-probabilities over the flat action index, per-entry duration mean, duration std)."""
-        distribution = self._require_distribution()
+        return self.distribution_params(self._require_distribution())
+
+    def distribution_params(self, distribution: FootstepDistribution) -> tuple[torch.Tensor, ...]:
+        """`output_distribution_params` of any distribution this model made."""
         n = distribution.candidates.num_robots
         return (
             distribution.categorical.logits,

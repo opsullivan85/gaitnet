@@ -31,6 +31,7 @@ compose.
 | `slowdown_redirect` | + group `base_command`, `footholds` | both observers, nudges summed | ~0 |
 | `swing_duration_ablation` | — | `CandidateScorer` with `fixed_duration=0.25` s: no duration head, the policy is the footstep choice alone | ~0 |
 | `gpu_mpc` | the low-level controller runs batched on the GPU instead of in a CPU process pool | — | ~0 |
+| `symmetry` | — | PPO trains on every minibatch and its left/right mirror image (`SymmetricPPO`) | 2x the network's |
 
 \* Forward and backward of the actor on one PPO minibatch (64000 rows, 4 legs x 64
 candidates) on an RTX 5070 Ti; PPO runs 32 per iteration. Without `gpu_mpc`, rollouts are
@@ -96,6 +97,33 @@ Observers only run while acting (gradients off), so PPO's update passes don't ad
 their memory, and they are reset for envs whose episode ended. Exported bundles carry the
 observers, and `eval_sweep` runs them unless given `--no_observers`.
 
+### Left/right symmetry
+
+`presets=symmetry` is RSL-RL's symmetry augmentation (Mittal et al., ICRA 2024): each PPO
+minibatch is followed by its mirror image, with left and right legs swapped, y negated and
+each choice moved to the mirrored candidate, and both halves train the actor and critic.
+The mirror of every observation term is in `gaitnet_sim.rl.symmetry.TERM_MIRRORS`, built on
+`gaitnet_core.symmetry`; a new term needs one there. It composes with every other preset,
+and bundles and deployment are unaffected.
+
+It logs `symmetry`: the KL between the mirrored policy and the policy at the mirrored
+observation, 0 for a perfectly symmetric policy. Variants, by override of the preset's keys:
+
+```bash
+# only the metric, training unchanged (costs one no-grad actor pass per minibatch)
+presets=symmetry agent.algorithm.symmetry_cfg.use_data_augmentation=False
+
+# also the mirror loss, that KL added to PPO's loss
+presets=symmetry agent.algorithm.symmetry_cfg.use_mirror_loss=True agent.algorithm.symmetry_cfg.mirror_loss_coeff=0.1
+```
+
+Augmentation doubles every minibatch, so it doubles PPO's update: 7.3 → 14.7 s per
+iteration for the default scorer, 29.6 → 59.7 s for `spatial` (512 envs x 250 steps, RTX
+5070 Ti), and 0.5 and 1.9 GiB more peak memory. Collection is untouched, so a
+`presets=gpu_mpc,privileged` iteration at 512 envs goes 40.3 → 47.7 s. The metric alone adds
+2.1 s (7.1 s with `spatial`) to the update, and the mirror loss ~0.04 s on top of
+augmentation.
+
 ## Overrides
 
 Anything in the env or agent cfg can be overridden on the command line. Isaac Lab 3
@@ -144,7 +172,8 @@ described.
 
 ## Adding a variant
 
-- A state feature: an entry in `gaitnet_core.features.FEATURES`.
+- A state feature: an entry in `gaitnet_core.features.FEATURES`, with how it mirrors.
+- An observation term: also its mirror in `gaitnet_sim.rl.symmetry.TERM_MIRRORS`.
 - A candidate encoding: an entry in `gaitnet_core.networks.CANDIDATE_FEATURES`.
 - A network: a module in `gaitnet_core.networks.NETWORKS` taking `(state, candidates,
   terrain)` and returning `Scores`; set `uses_terrain` if it reads terrain.
