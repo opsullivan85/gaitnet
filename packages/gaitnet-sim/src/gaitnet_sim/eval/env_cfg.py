@@ -18,18 +18,15 @@ from gaitnet_sim.terrains import make_eval_terrain
 
 logger = logging.getLogger(__name__)
 
-# how much further than the furthest reachable point a sub-terrain extends
-_TERRAIN_LENGTH_MARGIN = 1.25
-_MIN_TERRAIN_LENGTH = 4.0
 # the largest collision mesh known to work; beyond it robots have fallen through the ground
 _TRIANGLE_BUDGET = 6.4e6
 
 
-def sub_terrain_length(velocities: list[float], episode_length_s: float) -> float:
-    """Long enough to hold a whole episode. Robots spawn at the centre and walk +x, so only
-    half is runway. Terrain dominates scene build time, so it's sized to the episode."""
-    reachable = max(velocities) * episode_length_s
-    return max(_MIN_TERRAIN_LENGTH, 2.0 * reachable * _TERRAIN_LENGTH_MARGIN)
+def episode_length_for(velocities: list[float], terrain_length: float) -> float:
+    """Long enough for the slowest velocity to walk off the far end of a sub-terrain. Robots
+    spawn at the centre and walk +x, so only half the length is runway. Faster velocities get
+    there sooner and end on the sub-terrain edge, which counts as reaching the time limit."""
+    return (terrain_length / 2.0) / min(velocities)
 
 
 def apply_bundle_contract(env_cfg: GaitNetEnvCfg, bundle: PolicyBundle) -> None:
@@ -57,12 +54,16 @@ def make_eval_env_cfg(
     difficulties: list[float],
     velocities: list[float],
     envs_per_difficulty: int,
-    terrain_length: float | None = None,
+    terrain_length: float,
+    episode_length_s: float | None = None,
     randomize: bool = False,
 ) -> GaitNetEnvCfg:
     """Rewrite `env_cfg` (in place, and returned) for a sweep over `difficulties` x `velocities`.
 
     Args:
+        terrain_length: sub-terrain length (m)
+        episode_length_s: by default `episode_length_for` the slowest velocity to cross the
+            terrain, replacing the env's own
         randomize: keep training's randomization and observation noise; by default the
             sweep runs with nominal dynamics and exact observations (`play_mode`)
     """
@@ -71,15 +72,16 @@ def make_eval_env_cfg(
         env_cfg.play_mode()
     num_envs = len(difficulties) * envs_per_difficulty
     env_cfg.scene.num_envs = num_envs
-    if terrain_length is None:
-        terrain_length = sub_terrain_length(velocities, env_cfg.episode_length_s)
+    if episode_length_s is None:
+        episode_length_s = episode_length_for(velocities, terrain_length)
+    env_cfg.episode_length_s = episode_length_s
 
     generator = env_cfg.scene.terrain.terrain_generator
     scale = generator.horizontal_scale
     triangles = num_envs * round((terrain_length / scale - 1) * (1.0 / scale - 1) * 2)
     logger.info(
         f"terrain: {len(difficulties)} difficulties x {envs_per_difficulty} envs, {terrain_length:.1f} m"
-        f" sub-terrains, ~{triangles / 1e6:.1f}M collision triangles"
+        f" sub-terrains, ~{triangles / 1e6:.1f}M collision triangles; {episode_length_s:.0f} s episodes"
     )
     if triangles > _TRIANGLE_BUDGET:
         logger.warning(

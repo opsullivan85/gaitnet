@@ -30,13 +30,18 @@ parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
 parser.add_argument("--bundle", required=True, help="Policy bundle file (gaitnet_sim.scripts.export_bundle).")
 parser.add_argument("--task", default="GaitNet-Holes", help="Task whose terrain type to sweep.")
 parser.add_argument(
-    "--difficulties", type=float, nargs="+", default=[0.0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4]
+    "--difficulties", type=float, nargs="+", default=[0.0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5]
 )
-parser.add_argument("--velocities", type=float, nargs="+", default=[0.05, 0.1, 0.15, 0.2])
-parser.add_argument("--envs_per_difficulty", type=int, default=50)
-parser.add_argument("--trials", type=int, default=1)
-parser.add_argument("--terrain_length", type=float, default=None, help="Sub-terrain length (m); sized to the episode by default.")
-parser.add_argument("--episode_length_s", type=float, default=None, help="Episode length (s); the env's by default.")
+parser.add_argument("--velocities", type=float, nargs="+", default=[0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5])
+parser.add_argument("--envs_per_difficulty", type=int, default=12)
+parser.add_argument("--trials", type=int, default=8)
+parser.add_argument("--terrain_length", type=float, default=8.0, help="Sub-terrain length (m).")
+parser.add_argument(
+    "--episode_length_s",
+    type=float,
+    default=None,
+    help="Episode length (s); by default long enough for the slowest velocity to cross the terrain.",
+)
 parser.add_argument("--sampler", default="dense", help="Candidate sampler (gaitnet_core.samplers.SAMPLERS).")
 parser.add_argument("--per_leg", type=int, default=None, help="Candidates per leg, for the sampling samplers.")
 parser.add_argument("--stochastic", action="store_true", help="Sample footsteps instead of the deterministic choice.")
@@ -123,8 +128,6 @@ def main() -> int:
         return 1
 
     env_cfg = parse_env_cfg(args_cli.task, device=device, overrides=hydra_overrides)
-    if args_cli.episode_length_s is not None:
-        env_cfg.episode_length_s = args_cli.episode_length_s
     make_eval_env_cfg(
         env_cfg,
         bundle,
@@ -132,6 +135,7 @@ def main() -> int:
         velocities=args_cli.velocities,
         envs_per_difficulty=args_cli.envs_per_difficulty,
         terrain_length=args_cli.terrain_length,
+        episode_length_s=args_cli.episode_length_s,
         randomize=args_cli.randomize,
     )
     env = ManagerBasedRLEnv(cfg=env_cfg)

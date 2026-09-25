@@ -42,13 +42,13 @@
             "label": "Run: eval sweep",
             "detail": "Full sweep, recorded in MLflow under the bundle's training run.",
             "type": "shell",
-            "command": "V=\"${input:evalVelocities}\"; docker compose -f docker/compose.yaml run --rm ${input:livestream} -m gaitnet_sim.scripts.eval_sweep --bundle ${input:bundlePath} --task ${input:evalTask} ${input:evalVariant} --mlflow_run=${input:mlflowRunOverride} ${=${V:+--velocities $V}} --terrain_length 2.0 presets=gpu_mpc"
+            "command": "V=\"${input:evalVelocities}\"; docker compose -f docker/compose.yaml run --rm ${input:livestream} -m gaitnet_sim.scripts.eval_sweep --bundle ${input:bundlePath} --task ${input:evalTask} ${input:evalVariant} --mlflow_run=${input:mlflowRunOverride} ${=${V:+--velocities $V}} presets=gpu_mpc"
         },
         {
             "label": "Run: eval sweep (quick check)",
             "detail": "2 difficulties x 1 velocity x 8 robots: does the eval and its MLflow logging work at all.",
             "type": "shell",
-            "command": "docker compose -f docker/compose.yaml run --rm ${input:livestream} -m gaitnet_sim.scripts.eval_sweep --bundle ${input:bundlePath} --task ${input:evalTask} ${input:evalVariant} --mlflow_run=${input:mlflowRunOverride} --difficulties 0 0.2 --velocities 0.1 --envs_per_difficulty 8 presets=gpu_mpc"
+            "command": "docker compose -f docker/compose.yaml run --rm ${input:livestream} -m gaitnet_sim.scripts.eval_sweep --bundle ${input:bundlePath} --task ${input:evalTask} ${input:evalVariant} --mlflow_run=${input:mlflowRunOverride} --difficulties 0 0.2 --velocities 0.1 --envs_per_difficulty 8 --terrain_length 2.0 --trials 1 presets=gpu_mpc"
         },
         {
             "label": "Watch: policy (livestreamed)",
@@ -110,7 +110,7 @@
             "label": "Debug: eval sweep",
             "detail": "Then run 'Attach to GaitNet (docker)' in Run and Debug once Isaac Sim finishes booting.",
             "type": "shell",
-            "command": "docker compose -f docker/compose.yaml run --rm --service-ports ${input:livestream} -m debugpy --listen 0.0.0.0:5678 --wait-for-client -m gaitnet_sim.scripts.eval_sweep --bundle ${input:bundlePath} --task ${input:evalTask} ${input:evalVariant} --mlflow_run=${input:mlflowRunOverride} --difficulties 0 0.2 --velocities 0.1 --envs_per_difficulty 8"
+            "command": "docker compose -f docker/compose.yaml run --rm --service-ports ${input:livestream} -m debugpy --listen 0.0.0.0:5678 --wait-for-client -m gaitnet_sim.scripts.eval_sweep --bundle ${input:bundlePath} --task ${input:evalTask} ${input:evalVariant} --mlflow_run=${input:mlflowRunOverride} --difficulties 0 0.2 --velocities 0.1 --envs_per_difficulty 8 --terrain_length 2.0 --trials 1"
         },
         {
             "label": "Debug: pytest (core, sim, ros1)",
@@ -222,7 +222,7 @@
         {
             "id": "evalVelocities",
             "type": "promptString",
-            "description": "Velocities to sweep, space-separated m/s, e.g. '0.1 0.2' (blank: module default 0.05 0.1 0.15 0.2)",
+            "description": "Velocities to sweep, space-separated m/s, e.g. '0.1 0.2' (blank: module default)",
             "default": ""
         },
         {
