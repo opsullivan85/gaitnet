@@ -1,6 +1,7 @@
 """The training env cfg, turned into an evaluation scene: every terrain difficulty on its
-own row of one terrain, a fixed forward velocity command, and the policy bundle's contract
-(foothold grid and rules) in place of the env's defaults."""
+own row of one terrain, robots spawned at the -x end of their sub-terrain, a fixed forward
+velocity command, and the policy bundle's contract (foothold grid and rules) in place of the
+env's defaults."""
 
 from __future__ import annotations
 
@@ -18,15 +19,14 @@ from gaitnet_sim.terrains import make_eval_terrain
 
 logger = logging.getLogger(__name__)
 
-# the largest collision mesh known to work; beyond it robots have fallen through the ground
-_TRIANGLE_BUDGET = 6.4e6
 
-
-def episode_length_for(velocities: list[float], terrain_length: float) -> float:
-    """Long enough for the slowest velocity to walk off the far end of a sub-terrain. Robots
-    spawn at the centre and walk +x, so only half the length is runway. Faster velocities get
-    there sooner and end on the sub-terrain edge, which counts as reaching the time limit."""
-    return (terrain_length / 2.0) / min(velocities)
+def runway(env_cfg: GaitNetEnvCfg) -> float:
+    """How far a robot walks in a scene from `make_eval_env_cfg`, from the centre of the spawn
+    platform to the far end of its sub-terrain (m), where its episode ends. The sweep sets
+    each velocity's episode length to walk it."""
+    generator = env_cfg.scene.terrain.terrain_generator
+    platform = next(iter(generator.sub_terrains.values())).platform_size
+    return generator.size[0] - 0.5 * platform
 
 
 def apply_bundle_contract(env_cfg: GaitNetEnvCfg, bundle: PolicyBundle) -> None:
@@ -55,45 +55,29 @@ def make_eval_env_cfg(
     velocities: list[float],
     envs_per_difficulty: int,
     terrain_length: float,
-    episode_length_s: float | None = None,
     randomize: bool = False,
 ) -> GaitNetEnvCfg:
     """Rewrite `env_cfg` (in place, and returned) for a sweep over `difficulties` x `velocities`.
+    The episode length is left to the sweep, see `runway`.
 
     Args:
         terrain_length: sub-terrain length (m)
-        episode_length_s: by default `episode_length_for` the slowest velocity to cross the
-            terrain, replacing the env's own
         randomize: keep training's randomization and observation noise; by default the
             sweep runs with nominal dynamics and exact observations (`play_mode`)
     """
     apply_bundle_contract(env_cfg, bundle)
     if not randomize:
         env_cfg.play_mode()
-    num_envs = len(difficulties) * envs_per_difficulty
-    env_cfg.scene.num_envs = num_envs
-    if episode_length_s is None:
-        episode_length_s = episode_length_for(velocities, terrain_length)
-    env_cfg.episode_length_s = episode_length_s
-
-    generator = env_cfg.scene.terrain.terrain_generator
-    scale = generator.horizontal_scale
-    triangles = num_envs * round((terrain_length / scale - 1) * (1.0 / scale - 1) * 2)
-    logger.info(
-        f"terrain: {len(difficulties)} difficulties x {envs_per_difficulty} envs, {terrain_length:.1f} m"
-        f" sub-terrains, ~{triangles / 1e6:.1f}M collision triangles; {episode_length_s:.0f} s episodes"
-    )
-    if triangles > _TRIANGLE_BUDGET:
-        logger.warning(
-            f"~{triangles / 1e6:.1f}M collision triangles is over the {_TRIANGLE_BUDGET / 1e6:.1f}M known to work."
-            " If robots end on foot_below_ground at once, they are falling through the terrain:"
-            " lower --terrain_length or --envs_per_difficulty."
-        )
+    env_cfg.scene.num_envs = len(difficulties) * envs_per_difficulty
     make_eval_terrain(
         env_cfg.scene.terrain,
         difficulties=tuple(difficulties),
         envs_per_difficulty=envs_per_difficulty,
         sub_terrain_size=(terrain_length, 1.0),
+    )
+    logger.info(
+        f"terrain: {len(difficulties)} difficulties x {envs_per_difficulty} envs, {terrain_length:.1f} m"
+        f" sub-terrains, {runway(env_cfg):.2f} m walked from the spawn platform"
     )
     # each robot stays on its difficulty's row
     env_cfg.curriculum.terrain_levels = None
@@ -101,7 +85,13 @@ def make_eval_env_cfg(
     env_cfg.terminations.terrain_out_of_bounds = DoneTerm(
         func=out_of_sub_terrain, params={"distance_buffer": 0.0}, time_out=True
     )
-    env_cfg.events.reset_base.params["pose_range"] = {"x": (-0.1, 0.1), "y": (-0.1, 0.1), "yaw": (0.0, 0.0)}
+    # on the platform at the -x end, a runway short of the far end; relative to the centre
+    spawn_x = 0.5 * terrain_length - runway(env_cfg)
+    env_cfg.events.reset_base.params["pose_range"] = {
+        "x": (spawn_x - 0.1, spawn_x + 0.1),
+        "y": (-0.1, 0.1),
+        "yaw": (0.0, 0.0),
+    }
     # swept in place (FixedVelocityCommand.set_command); this is only the first value
     env_cfg.commands.base_velocity = FixedVelocityCommandCfg(command=(velocities[0], 0.0, 0.0))
     # the planner samples its own candidates from the terrain scan

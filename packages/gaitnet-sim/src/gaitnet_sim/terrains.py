@@ -18,6 +18,8 @@ class HfHolesTerrainCfg(HfTerrainBaseCfg):
     """Depth of the holes (m), negative."""
     platform_size: float = 1.0
     """Side of the hole-free square at the centre, where robots spawn (m)."""
+    platform_at_start: bool = False
+    """Put the platform at the -x end instead of the centre, for evaluation (`make_eval_terrain`)."""
 
 
 TERRAIN_MATERIAL = PhysxRigidBodyMaterialCfg(
@@ -44,6 +46,8 @@ class HfPillarsTerrainCfg(HfTerrainBaseCfg):
     """Height of the void between pillars (m), negative."""
     platform_size: float = 1.0
     """Side of the flat square at the centre, where robots spawn (m)."""
+    platform_at_start: bool = False
+    """Put the platform at the -x end instead of the centre, for evaluation (`make_eval_terrain`)."""
 
 
 def _generated_terrain_cfg(name: str, sub_terrain: HfTerrainBaseCfg) -> TerrainImporterCfg:
@@ -80,7 +84,8 @@ def pillars_terrain_cfg() -> TerrainImporterCfg:
 
 @configclass
 class EvalTerrainGeneratorCfg(TerrainGeneratorCfg):
-    """Row i at exactly `difficulties[i]`, see `gaitnet_sim.terrain_generation.EvalTerrainGenerator`."""
+    """Row i at exactly `difficulties[i]`, with compacted meshes, see
+    `gaitnet_sim.terrain_generation.EvalTerrainGenerator`."""
 
     class_type: str = "gaitnet_sim.terrain_generation:EvalTerrainGenerator"
     curriculum: bool = False
@@ -101,12 +106,19 @@ def make_eval_terrain(
     sub_terrain_size: tuple[float, float],
 ) -> None:
     """Rewrite `terrain` in place as a one-difficulty-per-row evaluation grid, keeping its
-    sub-terrain type, material and scales."""
+    sub-terrain type, material and scales. The spawn platform moves to the -x end, so a robot
+    walking +x crosses the whole sub-terrain."""
     from gaitnet_sim.terrain_generation import EvalTerrainImporter
 
     generator = terrain.terrain_generator
     if generator is None:
         raise ValueError("expected a generated terrain")
+    # copied: the generator writes the grid's scales into each sub-terrain cfg
+    sub_terrains = {name: cfg.copy() for name, cfg in generator.sub_terrains.items()}
+    for name, cfg in sub_terrains.items():
+        if not hasattr(cfg, "platform_at_start"):
+            raise ValueError(f"sub-terrain {name!r} has no spawn platform to move to the start")
+        cfg.platform_at_start = True
     terrain.class_type = EvalTerrainImporter
     terrain.terrain_generator = EvalTerrainGeneratorCfg(
         size=sub_terrain_size,
@@ -114,8 +126,7 @@ def make_eval_terrain(
         vertical_scale=generator.vertical_scale,
         slope_threshold=generator.slope_threshold,
         border_width=generator.border_width,
-        # copied: the generator writes the grid's scales into each sub-terrain cfg
-        sub_terrains={name: cfg.copy() for name, cfg in generator.sub_terrains.items()},
+        sub_terrains=sub_terrains,
         num_rows=len(difficulties),
         num_cols=envs_per_difficulty,
         difficulties=tuple(difficulties),

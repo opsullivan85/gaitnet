@@ -48,7 +48,7 @@
             "label": "Run: eval sweep (quick check)",
             "detail": "2 difficulties x 1 velocity x 8 robots: does the eval and its MLflow logging work at all.",
             "type": "shell",
-            "command": "docker compose -f docker/compose.yaml run --rm ${input:livestream} -m gaitnet_sim.scripts.eval_sweep --bundle ${input:bundlePath} --task ${input:evalTask} ${input:evalVariant} --mlflow_run=${input:mlflowRunOverride} --difficulties 0 0.2 --velocities 0.1 --envs_per_difficulty 8 --terrain_length 2.0 --trials 1 presets=gpu_mpc"
+            "command": "docker compose -f docker/compose.yaml run --rm ${input:livestream} -m gaitnet_sim.scripts.eval_sweep --bundle ${input:bundlePath} --task ${input:evalTask} ${input:evalVariant} --mlflow_run=${input:mlflowRunOverride} --difficulties 0 0.2 --velocities 0.1 --envs_per_difficulty 8 --terrain_length 2.0 presets=gpu_mpc"
         },
         {
             "label": "Watch: policy (livestreamed)",
@@ -232,7 +232,7 @@
             "options": [
                 { "label": "training (curriculum grid, random commands, runs until stopped)", "value": "gaitnet_sim.scripts.play --num_envs 16" },
                 { "label": "training + robot 0's foothold scores (per-leg heatmaps in logs/footholds, every tick)", "value": "gaitnet_sim.scripts.play --num_envs 16 --footholds 0 --footholds_frames" },
-                { "label": "eval (a row per difficulty 0.1-0.4, v=0.1, 3 trials; logged to MLflow)", "value": "gaitnet_sim.scripts.eval_sweep --difficulties 0.1 0.2 0.3 0.4 --velocities 0.1 --envs_per_difficulty 4 --trials 3" }
+                { "label": "eval (a row per difficulty 0.1-0.4, v=0.1, 12 robots each; logged to MLflow)", "value": "gaitnet_sim.scripts.eval_sweep --difficulties 0.1 0.2 0.3 0.4 --velocities 0.1 --envs_per_difficulty 12" }
             ],
             "default": "gaitnet_sim.scripts.play --num_envs 16"
         },

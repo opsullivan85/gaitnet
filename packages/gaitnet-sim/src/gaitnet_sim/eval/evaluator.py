@@ -26,6 +26,10 @@ class Evaluator:
         self.distance = torch.zeros(n, device=device)
         self.steps = torch.zeros(n, dtype=torch.long, device=device)
         self.reason = torch.full((n,), -1, dtype=torch.long, device=device)
+        self.start_x = self._x()
+
+    def _x(self) -> torch.Tensor:
+        return self.env.scene[self.asset_name].data.root_link_pos_w.torch[:, 0].clone()
 
     def record(self, step: "VecEnvStepReturn") -> bool:
         """Record one `env.step` return. True once every robot's first episode has ended."""
@@ -36,9 +40,8 @@ class Evaluator:
 
         # Robots whose episode just ended were already reset, so their position now is a
         # fresh spawn: they keep the distance from the step before. Distance is along the
-        # command (+x) from the sub-terrain the robot spawned on.
-        position = self.env.scene[self.asset_name].data.root_link_pos_w.torch
-        x = position[:, 0] - self.env.scene.env_origins[:, 0]
+        # command (+x) from where the robot spawned.
+        x = self._x() - self.start_x
         walking = running & ~ended
         self.distance[walking] = x[walking]
 

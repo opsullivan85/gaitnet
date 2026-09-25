@@ -211,6 +211,16 @@ experimental pieces: `--sampler` / `--per_leg` (the default is dense), `--refine
 refinement of each footstep on the network's score, `--refine_steps`), `--stochastic`,
 `--no_observers`, and `--randomize` (training's randomization and noise instead of nominal).
 
+Each robot gets its own sub-terrain (`--terrain_length` by 1 m), spawns on the platform at its
+-x end and walks to the far end; each velocity's episode is as long as that takes at that
+velocity. The terrain is generated once, so `--trials` only re-rolls the spawn: variety comes
+from `--envs_per_difficulty` and `--terrain_length`, limited by the collision triangles the
+scene can hold (6.4M is known to work). The eval generator merges every flat, untouched cell
+of Isaac Lab's height-field mesh into rectangles and keeps every other triangle, so the
+surface is exactly the same. At 8 m, a strip drops from 25.6k triangles to ~7.3k (holes) or
+~11.9k (pillars) on average over difficulties 0-0.5, so 45 robots x 11 difficulties
+fit at ~3.6M / ~5.9M.
+
 `gaitnet_sim.scripts.landing_error` measures how far feet land from the footholds a bundle
 commands, which is the check for any change to the controllers' swing or footstep handling.
 It runs the bundle through the same runtime on training's terrain at one `--difficulty`

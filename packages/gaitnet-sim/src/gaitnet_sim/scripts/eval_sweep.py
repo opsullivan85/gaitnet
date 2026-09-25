@@ -6,7 +6,11 @@
         --envs_per_difficulty 8
 
 One scene holds every difficulty (one terrain row each), and velocities are swept in place,
-so there is one simulator boot, terrain cook and controller pool for the whole sweep. The
+so there is one simulator boot, terrain cook and controller pool for the whole sweep. Each
+robot spawns at the -x end of its own sub-terrain and walks it to the far end, and each
+velocity's episode lasts as long as that takes at that velocity. The terrain meshes are
+compacted without changing the surface, so ~500 robots on 8 m sub-terrains fit the collision
+triangle budget (`gaitnet_sim.terrain_generation`). The
 policy runs through the same `PlannerRuntime` as on hardware, with dense candidates,
 deterministic selection and the bundle's feedback observers, on nominal dynamics with exact
 observations, unless told otherwise; `--refine` adds gradient refinement of each footstep
@@ -33,14 +37,23 @@ parser.add_argument(
     "--difficulties", type=float, nargs="+", default=[0.0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5]
 )
 parser.add_argument("--velocities", type=float, nargs="+", default=[0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5])
-parser.add_argument("--envs_per_difficulty", type=int, default=12)
-parser.add_argument("--trials", type=int, default=8)
-parser.add_argument("--terrain_length", type=float, default=8.0, help="Sub-terrain length (m).")
+parser.add_argument(
+    "--envs_per_difficulty", type=int, default=45, help="Robots, each on its own sub-terrain, per difficulty."
+)
+parser.add_argument(
+    "--trials",
+    type=int,
+    default=1,
+    help="Runs per velocity. The terrain stays the same between them, so more only re-rolls the spawn.",
+)
+parser.add_argument(
+    "--terrain_length", type=float, default=8.0, help="Sub-terrain length (m); robots spawn at one end and walk it."
+)
 parser.add_argument(
     "--episode_length_s",
     type=float,
     default=None,
-    help="Episode length (s); by default long enough for the slowest velocity to cross the terrain.",
+    help="Episode length (s); by default, per velocity, the time to walk the sub-terrain at that velocity.",
 )
 parser.add_argument("--sampler", default="dense", help="Candidate sampler (gaitnet_core.samplers.SAMPLERS).")
 parser.add_argument("--per_leg", type=int, default=None, help="Candidates per leg, for the sampling samplers.")
@@ -77,7 +90,7 @@ from gaitnet_core.bundle import load_bundle  # noqa: E402
 from gaitnet_core.refine import Refiner  # noqa: E402
 from gaitnet_core.runtime import PlannerRuntime  # noqa: E402
 from gaitnet_core.samplers import make_sampler  # noqa: E402
-from gaitnet_sim.eval.env_cfg import make_eval_env_cfg  # noqa: E402
+from gaitnet_sim.eval.env_cfg import make_eval_env_cfg, runway  # noqa: E402
 from gaitnet_sim.eval import report  # noqa: E402
 from gaitnet_sim.eval.evaluator import Evaluator  # noqa: E402
 from gaitnet_sim.isaac_robot import IsaacRobot  # noqa: E402
@@ -135,7 +148,6 @@ def main() -> int:
         velocities=args_cli.velocities,
         envs_per_difficulty=args_cli.envs_per_difficulty,
         terrain_length=args_cli.terrain_length,
-        episode_length_s=args_cli.episode_length_s,
         randomize=args_cli.randomize,
     )
     env = ManagerBasedRLEnv(cfg=env_cfg)
@@ -163,6 +175,12 @@ def main() -> int:
         writer.writeheader()
         for velocity in args_cli.velocities:
             command_term.set_command((velocity, 0.0, 0.0))
+            # read live by the time-out term; a robot that stands still is not kept waiting
+            # for the slowest velocity's episode
+            if args_cli.episode_length_s is not None:
+                env.cfg.episode_length_s = args_cli.episode_length_s
+            else:
+                env.cfg.episode_length_s = runway(env.cfg) / velocity
             for trial in range(args_cli.trials):
                 # the reset belongs inside inference mode: controller state rebound
                 # during the previous trial is made of inference tensors, which cannot
@@ -181,7 +199,10 @@ def main() -> int:
                     logger.error("the simulator stopped mid-trial")
                     return 1
                 elapsed = time.monotonic() - start
-                logger.info(f"v={velocity:g} trial {trial}: {ticks} ticks in {elapsed:.1f} s ({ticks / elapsed:.1f} ticks/s)")
+                logger.info(
+                    f"v={velocity:g} trial {trial}: {ticks} ticks in {elapsed:.1f} s ({ticks / elapsed:.1f} ticks/s),"
+                    f" {env.cfg.episode_length_s:.0f} s episodes"
+                )
                 rows = evaluator.rows()
                 for index, difficulty in enumerate(args_cli.difficulties):
                     group = rows[envs_for_difficulty(index, args_cli.envs_per_difficulty)]
