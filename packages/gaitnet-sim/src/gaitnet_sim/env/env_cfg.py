@@ -32,7 +32,7 @@ from gaitnet_sim.env.actions_cfg import FootstepControlActionCfg
 from gaitnet_sim.env.contract import GaitNetCfg
 from gaitnet_sim.env.scene import GaitNetSceneCfg
 from gaitnet_sim.robot import BASE_NAME
-from gaitnet_sim.terrains import pillars_terrain_cfg
+from gaitnet_sim.terrains import holed_pillars_terrain_cfg, pillars_terrain_cfg
 
 
 @configclass
@@ -266,4 +266,14 @@ class GaitNetPillarsEnvCfg(GaitNetEnvCfg):
 
     def __post_init__(self):
         self.scene.terrain = pillars_terrain_cfg()
+        super().__post_init__()
+
+
+@configclass
+class GaitNetHoledPillarsEnvCfg(GaitNetEnvCfg):
+    """Pillars with some missing; difficulty widens the height spread as on pillars, and the
+    gaps and missing pillars leave about as much steppable area as on holes."""
+
+    def __post_init__(self):
+        self.scene.terrain = holed_pillars_terrain_cfg()
         super().__post_init__()

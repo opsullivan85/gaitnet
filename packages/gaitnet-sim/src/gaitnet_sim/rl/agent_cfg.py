@@ -150,3 +150,8 @@ class GaitNetPpoRunnerCfg(RslRlOnPolicyRunnerCfg):
 @configclass
 class GaitNetPillarsPpoRunnerCfg(GaitNetPpoRunnerCfg):
     experiment_name = "gaitnet_pillars"
+
+
+@configclass
+class GaitNetHoledPillarsPpoRunnerCfg(GaitNetPpoRunnerCfg):
+    experiment_name = "gaitnet_holed_pillars"

@@ -48,7 +48,7 @@ directory is the checkout, bind-mounted at `/workspace/gaitnet`:
 # for pillars; --randomize to keep training's randomization and observation noise)
 docker compose -f docker/compose.yaml run --rm sim -m gaitnet_sim.scripts.walk --num_envs 4
 
-# train (tasks GaitNet-Holes and GaitNet-Pillars; Isaac Lab's train entry point, so
+# train (tasks GaitNet-Holes, GaitNet-Pillars and GaitNet-HoledPillars; Isaac Lab's train entry point, so
 # --max_iterations, --seed, --checkpoint, ..., presets and overrides such as
 # agent.algorithm.entropy_coef=0.01 all work; see packages/gaitnet-sim/README.md)
 docker compose -f docker/compose.yaml run --rm sim -m gaitnet_sim.scripts.train --task GaitNet-Holes --num_envs 1024

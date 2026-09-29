@@ -57,10 +57,12 @@ def hole_terrain(difficulty: float, cfg: "HfHolesTerrainCfg") -> np.ndarray:
 
 @height_field_to_mesh
 def pillar_terrain(difficulty: float, cfg: "HfPillarsTerrainCfg") -> np.ndarray:
-    """A grid of square pillars at random heights over a void, with a flat spawn platform.
+    """A grid of square pillars at random heights over a void, some of them missing, with a
+    flat spawn platform.
 
-    Difficulty scales the gaps between pillars (to `cfg.max_gap`) and the spread of their
-    heights (to +-`cfg.max_height_offset`), so difficulty 0 is flat ground.
+    Difficulty scales the gaps between pillars (to `cfg.max_gap`), the spread of their
+    heights (to +-`cfg.max_height_offset`) and the fraction of pillars missing (to
+    `cfg.max_missing`), so difficulty 0 is flat ground.
 
     Returns:
         (width, length) heights in units of `cfg.vertical_scale`.
@@ -74,9 +76,18 @@ def pillar_terrain(difficulty: float, cfg: "HfPillarsTerrainCfg") -> np.ndarray:
     # a random phase so pillar edges fall differently relative to the spawn on each
     # sub-terrain; drawn from numpy's global state like the holes, see hole_terrain
     phase = np.random.randint(0, pitch, size=2)
+    pillars = []
     for x0 in range(phase[0] - pitch, pixels[0], pitch):
         for y0 in range(phase[1] - pitch, pixels[1], pitch):
-            height = np.random.uniform(-max_offset, max_offset)
+            pillars.append((x0, y0, np.random.uniform(-max_offset, max_offset)))
+
+    # only pillars at least partly on the sub-terrain count towards the missing fraction; the
+    # draw is skipped when none are missing, so pillars without holes come out as they always have
+    shown = [i for i, (x0, y0, _) in enumerate(pillars) if x0 + width > 0 and y0 + width > 0]
+    missing = int(difficulty * cfg.max_missing * len(shown))
+    removed = set(np.random.permutation(shown)[:missing].tolist()) if missing else set()
+    for i, (x0, y0, height) in enumerate(pillars):
+        if i not in removed:
             terrain[max(x0, 0) : max(x0 + width, 0), max(y0, 0) : max(y0 + width, 0)] = height
 
     platform = int(cfg.platform_size / cfg.horizontal_scale)

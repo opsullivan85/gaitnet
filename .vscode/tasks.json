@@ -136,7 +136,7 @@
             "id": "trainTask",
             "type": "pickString",
             "description": "Terrain to train on",
-            "options": ["GaitNet-Holes", "GaitNet-Pillars"],
+            "options": ["GaitNet-Holes", "GaitNet-Pillars", "GaitNet-HoledPillars"],
             "default": "GaitNet-Holes"
         },
         {
@@ -203,7 +203,7 @@
             "id": "evalTask",
             "type": "pickString",
             "description": "Terrain to sweep",
-            "options": ["GaitNet-Holes", "GaitNet-Pillars"],
+            "options": ["GaitNet-Holes", "GaitNet-Pillars", "GaitNet-HoledPillars"],
             "default": "GaitNet-Holes"
         },
         {

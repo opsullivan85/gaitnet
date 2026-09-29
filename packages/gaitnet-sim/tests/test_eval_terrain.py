@@ -3,6 +3,8 @@ compaction leaving the surface exactly as Isaac Lab's height-field conversion ma
 
 from __future__ import annotations
 
+import functools
+
 import numpy as np
 import pytest
 
@@ -12,7 +14,11 @@ from gaitnet_sim.terrain_generation import compact_height_field_mesh, hole_terra
 from gaitnet_sim.terrains import HfHolesTerrainCfg, HfPillarsTerrainCfg  # noqa: E402
 
 SCALES = {"horizontal_scale": 0.025, "vertical_scale": 0.005, "slope_threshold": 0.0}
-TERRAINS = [(hole_terrain, HfHolesTerrainCfg), (pillar_terrain, HfPillarsTerrainCfg)]
+TERRAINS = [
+    (hole_terrain, HfHolesTerrainCfg),
+    (pillar_terrain, HfPillarsTerrainCfg),
+    (pillar_terrain, functools.partial(HfPillarsTerrainCfg, max_missing=1.0)),
+]
 
 
 @pytest.mark.parametrize("terrain, cfg_type", TERRAINS)

@@ -1,5 +1,5 @@
-"""Terrain cfgs: randomly holed flat ground and pillars of varying height for training, and
-an evaluation grid that holds a whole difficulty sweep in one scene. The implementations are in
+"""Terrain cfgs: randomly holed flat ground, pillars of varying height and pillars with some
+missing for training, and an evaluation grid that holds a whole difficulty sweep in one scene. The implementations are in
 `gaitnet_sim.terrain_generation`, referenced by name so these import without the simulator."""
 
 from __future__ import annotations
@@ -42,6 +42,8 @@ class HfPillarsTerrainCfg(HfTerrainBaseCfg):
     """Gap between neighbouring pillars at difficulty 1 (m); none at difficulty 0."""
     max_height_offset: float = 0.1
     """Pillar heights are uniform in +-(difficulty * this) (m)."""
+    max_missing: float = 0.0
+    """Fraction of pillars left out at difficulty 1; `difficulty * this` are missing."""
     hole_depth: float = -0.5
     """Height of the void between pillars (m), negative."""
     platform_size: float = 1.0
@@ -75,6 +77,15 @@ def holes_terrain_cfg() -> TerrainImporterCfg:
 
 def pillars_terrain_cfg() -> TerrainImporterCfg:
     return _generated_terrain_cfg("pillars", HfPillarsTerrainCfg())
+
+
+def holed_pillars_terrain_cfg() -> TerrainImporterCfg:
+    """Pillars with some missing: the height spread of `pillars_terrain_cfg`, with the gaps
+    and the missing fraction scaled so the steppable area tracks `holes_terrain_cfg`'s
+    (1 - difficulty) over the training range."""
+    # fitted by measurement: the pillars' gaps alone, at their own max_gap, already leave no
+    # more steppable area than the holes do (a one-sample gap around a pillar is 21% of it)
+    return _generated_terrain_cfg("holed_pillars", HfPillarsTerrainCfg(max_gap=0.05, max_missing=0.7))
 
 
 ##

@@ -10,8 +10,9 @@ page covers what to change for an experiment.
 | --- | --- | --- |
 | `GaitNet-Holes` | flat ground with random holes | fraction of holes |
 | `GaitNet-Pillars` | square pillars at random heights over a void | gap width and height spread |
+| `GaitNet-HoledPillars` | the pillars, with some of them missing | height spread as `Pillars`; gaps and missing pillars leave ~ the steppable area of `Holes` |
 
-Both train on a curriculum over difficulty rows and share everything but the terrain.
+All train on a curriculum over difficulty rows and share everything but the terrain.
 
 ## Presets
 

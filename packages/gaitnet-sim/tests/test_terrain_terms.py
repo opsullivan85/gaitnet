@@ -1,4 +1,4 @@
-"""The pillar height field and the terrain-relative terminations, without the simulator."""
+"""The pillar height fields and the terrain-relative terminations, without the simulator."""
 
 from __future__ import annotations
 
@@ -14,14 +14,18 @@ from gaitnet_core.grid import FootholdGrid  # noqa: E402
 from gaitnet_core.robot_spec import GO1  # noqa: E402
 from gaitnet_core.state import TerrainPatch  # noqa: E402
 from gaitnet_sim.env.terminations import base_below_terrain_clearance, feet_below_walkable_terrain  # noqa: E402
-from gaitnet_sim.terrain_generation import pillar_terrain  # noqa: E402
-from gaitnet_sim.terrains import HfPillarsTerrainCfg  # noqa: E402
+from gaitnet_sim.terrain_generation import hole_terrain, pillar_terrain  # noqa: E402
+from gaitnet_sim.terrains import HfHolesTerrainCfg, HfPillarsTerrainCfg, holed_pillars_terrain_cfg  # noqa: E402
 
 GRID = FootholdGrid(resolution=0.015, size=(9, 9), border=2)
 
 
-def pillars(difficulty: float, seed: int = 0) -> tuple[np.ndarray, HfPillarsTerrainCfg]:
-    cfg = HfPillarsTerrainCfg(size=(3.0, 3.0), horizontal_scale=0.025, vertical_scale=0.005)
+def pillars(
+    difficulty: float, seed: int = 0, max_missing: float = 0.0
+) -> tuple[np.ndarray, HfPillarsTerrainCfg]:
+    cfg = HfPillarsTerrainCfg(
+        size=(3.0, 3.0), horizontal_scale=0.025, vertical_scale=0.005, max_missing=max_missing
+    )
     np.random.seed(seed)
     # the undecorated height field, before Isaac Lab's mesh conversion
     return pillar_terrain.__wrapped__(difficulty, cfg), cfg
@@ -45,6 +49,48 @@ def test_pillars_have_gaps_and_bounded_heights():
     platform = round(cfg.platform_size / cfg.horizontal_scale)
     start = (heights.shape[0] - platform) // 2
     assert (heights[start : start + platform, start : start + platform] == 0).all()
+
+
+def test_holed_pillars_at_difficulty_zero_are_flat():
+    heights, _ = pillars(0.0, max_missing=1.0)
+    assert (heights == 0).all()
+
+
+@pytest.mark.parametrize("difficulty", [0.2, 0.5])
+def test_holed_pillars_leave_out_a_difficulty_fraction_of_the_pillars(difficulty):
+    # the removal is drawn after the layout, so a seed gives the same pillars either way
+    whole, cfg = pillars(difficulty, seed=3)
+    holed, _ = pillars(difficulty, seed=3, max_missing=1.0)
+    void = round(cfg.hole_depth / cfg.vertical_scale)
+    # outside the spawn platform, which covers the middle third
+    third = whole.shape[0] // 3
+    for rows in (slice(0, third), slice(2 * third, None)):
+        kept = holed[rows] != void
+        assert (holed[rows][kept] == whole[rows][kept]).all()
+        missing = 1 - kept.sum() / (whole[rows] != void).sum()
+        assert abs(missing - difficulty) < 0.1
+
+
+def test_holed_pillars_track_the_steppable_area_of_holes():
+    scales = {"size": (4.0, 4.0), "horizontal_scale": 0.025, "vertical_scale": 0.005, "platform_size": 0.0}
+    holed = holed_pillars_terrain_cfg().terrain_generator.sub_terrains["holed_pillars"].replace(**scales)
+    holes = HfHolesTerrainCfg(**scales)
+
+    def steppable(terrain, cfg, difficulty):
+        void = round(cfg.hole_depth / cfg.vertical_scale)
+        fractions = []
+        for seed in range(4):
+            np.random.seed(seed)
+            fractions.append((terrain.__wrapped__(difficulty, cfg) != void).mean())
+        return np.mean(fractions)
+
+    errors = [
+        steppable(pillar_terrain, holed, d) - steppable(hole_terrain, holes, d)
+        for d in np.linspace(0.0, 0.5, 11)
+    ]
+    # the gaps come in whole height-field samples, so the area steps rather than slides
+    assert np.abs(errors).mean() < 0.05
+    assert np.abs(errors).max() < 0.1
 
 
 def fake_env_with_term(heights: torch.Tensor, foot_heights: torch.Tensor):

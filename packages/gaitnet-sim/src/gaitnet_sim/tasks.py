@@ -14,6 +14,10 @@ TASKS: dict[str, dict[str, str]] = {
         "env_cfg_entry_point": "gaitnet_sim.env.env_cfg:GaitNetPillarsEnvCfg",
         "rsl_rl_cfg_entry_point": "gaitnet_sim.rl.agent_cfg:GaitNetPillarsPpoRunnerCfg",
     },
+    "GaitNet-HoledPillars": {
+        "env_cfg_entry_point": "gaitnet_sim.env.env_cfg:GaitNetHoledPillarsEnvCfg",
+        "rsl_rl_cfg_entry_point": "gaitnet_sim.rl.agent_cfg:GaitNetHoledPillarsPpoRunnerCfg",
+    },
 }
 
 
