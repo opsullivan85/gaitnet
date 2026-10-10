@@ -24,10 +24,21 @@ def resolve(*overrides: str):
 def test_defaults_leave_the_optional_groups_off():
     env, agent = resolve()
     observations = env.observations
-    assert observations.terrain is None and observations.privileged is None and observations.base_command is None
-    assert observations.footholds is None
+    assert observations.terrain is None and observations.base_command is None and observations.footholds is None
     assert agent.actor.network["class_name"] == "CandidateScorer" and agent.actor.network["candidate_features"] == "xyz"
-    assert agent.actor.observers == {} and agent.obs_groups["critic"] == ["state"]
+    assert agent.actor.observers == {}
+
+
+def test_privileged_critic_is_the_default():
+    env, agent = resolve()
+    assert env.observations.privileged is not None
+    assert agent.obs_groups == {"actor": ["state"], "critic": ["state", "privileged"]}
+
+    env, agent = resolve("presets=unprivileged")
+    assert env.observations.privileged is None and agent.obs_groups["critic"] == ["state"]
+
+    env, agent = resolve("presets=privileged")
+    assert env.observations.privileged is not None and agent.obs_groups["critic"] == ["state", "privileged"]
 
 
 def test_presets_compose():
@@ -46,7 +57,7 @@ def test_presets_compose():
     assert env.observations.footholds is not None
 
     env, agent = resolve("presets=crop")
-    assert env.observations.terrain is not None and env.observations.privileged is None
+    assert env.observations.terrain is not None and env.observations.base_command is None
     assert agent.actor.network["candidate_features"] == "xyz_crop"
 
 
@@ -62,52 +73,53 @@ def test_swing_duration_ablation_fixes_the_duration():
     assert agent.actor.network["fixed_duration"] == 0.3
 
 
-def test_gpu_mpc_preset_swaps_the_controller():
+def test_cpu_mpc_preset_swaps_the_controller():
     """The low-level controller is a preset rather than an override, because Isaac Lab
     reads a whole-cfg override as choosing a preset by name. Its own fields still take
     overrides, which is how the solver budget is dialled."""
     from gaitnet_sim.controllers import BatchedMpc, PooledMpcController
 
     env, _ = resolve()
-    assert env.actions.footstep.controller.class_type is PooledMpcController
-
-    env, _ = resolve("presets=gpu_mpc")
     controller = env.actions.footstep.controller
     assert controller.class_type is BatchedMpc
-    # the two controllers have to agree on the things the env depends on
-    default = resolve()[0].actions.footstep.controller
-    assert controller.iterations_between_mpc == default.iterations_between_mpc
-    assert controller.foot_radius == default.foot_radius
+    assert resolve("presets=gpu_mpc")[0].actions.footstep.controller.class_type is BatchedMpc
 
-    env, _ = resolve("presets=gpu_mpc", "env.actions.footstep.controller.solver_iterations=120")
+    env, _ = resolve("presets=cpu_mpc")
+    pooled = env.actions.footstep.controller
+    assert pooled.class_type is PooledMpcController
+    # the two controllers have to agree on the things the env depends on
+    assert controller.iterations_between_mpc == pooled.iterations_between_mpc
+    assert controller.foot_radius == pooled.foot_radius
+
+    env, _ = resolve("env.actions.footstep.controller.solver_iterations=120")
     assert env.actions.footstep.controller.solver_iterations == 120
 
 
-def test_symmetry_preset_selects_mirror_augmentation():
+def test_mirror_augmentation_is_the_default():
     from rsl_rl.utils import resolve_callable
 
     from gaitnet_sim.rl.symmetry import SymmetricPPO, augment
 
-    _, agent = resolve()
-    assert agent.algorithm.class_name == "PPO" and agent.algorithm.symmetry_cfg is None
+    for overrides in [(), ("presets=symmetry",)]:
+        _, agent = resolve(*overrides)
+        symmetry = agent.algorithm.symmetry_cfg
+        assert symmetry.use_data_augmentation and not symmetry.use_mirror_loss
+        # what the runner hands RSL-RL
+        algorithm = agent.to_dict()["algorithm"]
+        assert resolve_callable(algorithm["class_name"]) is SymmetricPPO
+        assert resolve_callable(algorithm["symmetry_cfg"]["data_augmentation_func"]) is augment
 
-    _, agent = resolve("presets=symmetry,privileged")
-    symmetry = agent.algorithm.symmetry_cfg
-    assert symmetry.use_data_augmentation and not symmetry.use_mirror_loss
-    assert agent.obs_groups["critic"] == ["state", "privileged"]
-    # what the runner hands RSL-RL
-    algorithm = agent.to_dict()["algorithm"]
-    assert resolve_callable(algorithm["class_name"]) is SymmetricPPO
-    assert resolve_callable(algorithm["symmetry_cfg"]["data_augmentation_func"]) is augment
+    _, agent = resolve("presets=no_symmetry,unprivileged")
+    assert agent.algorithm.class_name == "PPO" and agent.algorithm.symmetry_cfg is None
+    assert agent.obs_groups["critic"] == ["state"]
 
     _, agent = resolve(
-        "presets=symmetry",
         "agent.algorithm.symmetry_cfg.use_mirror_loss=True",
         "agent.algorithm.symmetry_cfg.mirror_loss_coeff=0.1",
     )
     assert agent.algorithm.symmetry_cfg.use_mirror_loss and agent.algorithm.symmetry_cfg.mirror_loss_coeff == 0.1
 
-    _, agent = resolve("presets=symmetry", "agent.algorithm.symmetry_cfg.use_data_augmentation=False")
+    _, agent = resolve("agent.algorithm.symmetry_cfg.use_data_augmentation=False")
     assert not agent.algorithm.symmetry_cfg.use_data_augmentation
 
 

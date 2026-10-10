@@ -20,10 +20,12 @@ A uv workspace. Everything lives under `packages/`:
 `PlannerRuntime`. Put logic that both sides need in core, not in one of the adapters.
 
 There are two low-level controllers, both implementing core's `LowLevelController` and
-both running the same convex MPC: `gaitnet-mpc` in a CPU process pool (the default, and
-the reference every bundle was trained against) and `gaitnet_core.control` batched on the
-GPU (`presets=gpu_mpc`, what large env counts need). The second is a deliberate copy of
-the first, quirks included; don't "fix" one without the other.
+both running the same convex MPC: `gaitnet-mpc` in a CPU process pool (`presets=cpu_mpc`,
+the reference older bundles were trained against; a run's `env.controller` MLflow param
+says which) and
+`gaitnet_core.control` batched on the GPU (the default, what large env counts need). The
+second is a deliberate copy of the first, quirks included; don't "fix" one without the
+other.
 
 Read these before changing anything substantial — they are the real documentation:
 
@@ -94,9 +96,9 @@ tests yourself when you touch it.
 - **Rebuild the sim image** when `gaitnet-mpc` changes at all (it is installed
   non-editable) or when any package's dependencies change. Edits to core and sim are
   picked up without a rebuild.
-- **Measure performance changes.** With the CPU pool, rollouts are dominated by the MPC,
-  not the GPU policy; with `presets=gpu_mpc` that is no longer true past a few hundred
-  envs. Either way, if a change is meant to make something faster, benchmark before and
+- **Measure performance changes.** With the CPU pool (`presets=cpu_mpc`), rollouts are
+  dominated by the MPC, not the GPU policy; with the default batched controller that is no
+  longer true past a few hundred envs. Either way, if a change is meant to make something faster, benchmark before and
   after against a frozen baseline rather than reasoning about it.
 
 ## Style

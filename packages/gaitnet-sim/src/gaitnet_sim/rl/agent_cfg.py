@@ -8,11 +8,15 @@ log in the run directory.
 Presets (`presets=<name>[,<name>...]`), each matched by the env cfg's observation groups:
 - spatial: the dense spatial CNN (D1) actor, reading the terrain group
 - crop: the candidate scorer with the local-crop encoder, reading the terrain group
-- privileged: the critic also reads the privileged group
+- unprivileged: the critic reads only the state group, not the privileged one
 - slowdown: the actor runs the step-confidence slowdown observer, reading base_command
 - redirect: the actor runs the blocked-leg redirect observer, reading base_command and footholds
 - slowdown_redirect: both observers, their nudges summed
-- symmetry: left/right mirror augmentation of every PPO minibatch (`gaitnet_sim.rl.symmetry`)
+- no_symmetry: plain PPO, without the default left/right mirror augmentation of every PPO
+  minibatch (`gaitnet_sim.rl.symmetry`)
+
+`privileged` and `symmetry` name what is now the default; they are kept so older run
+commands resolve the same.
 """
 
 from __future__ import annotations
@@ -88,8 +92,9 @@ MIRROR_AUGMENTATION = RslRlSymmetryCfg(
     data_augmentation_func=symmetry.augment,
     mirror_loss_coeff=0.0,
 )
-"""The `symmetry` preset's settings. `use_data_augmentation=False` keeps only the logged
-`symmetry` metric; `use_mirror_loss=True` with a `mirror_loss_coeff` adds the mirror loss."""
+"""The default symmetry settings, off with `presets=no_symmetry`. `use_data_augmentation=False`
+keeps only the logged `symmetry` metric; `use_mirror_loss=True` with a `mirror_loss_coeff`
+adds the mirror loss."""
 
 
 @configclass
@@ -122,14 +127,19 @@ class GaitNetActorCfg:
 @configclass
 class GaitNetPpoRunnerCfg(RslRlOnPolicyRunnerCfg):
     num_steps_per_env = 250  # half an episode per rollout
-    max_iterations = 10000
+    max_iterations = 1000
     save_interval = 5
     experiment_name = "gaitnet_holes"
-    obs_groups = {"actor": ["state"], "critic": preset(default=["state"], privileged=["state", "privileged"])}
+    obs_groups = {
+        "actor": ["state"],
+        "critic": preset(
+            default=["state", "privileged"], privileged=["state", "privileged"], unprivileged=["state"]
+        ),
+    }
     actor = GaitNetActorCfg()
     critic = RslRlMLPModelCfg(hidden_dims=[64] * 6, activation="relu", obs_normalization=False)
     algorithm = RslRlPpoAlgorithmCfg(
-        class_name=preset(default="PPO", symmetry=symmetry.SymmetricPPO),
+        class_name=preset(default=symmetry.SymmetricPPO, symmetry=symmetry.SymmetricPPO, no_symmetry="PPO"),
         value_loss_coef=0.5,
         use_clipped_value_loss=True,
         clip_param=0.3,
@@ -142,7 +152,7 @@ class GaitNetPpoRunnerCfg(RslRlOnPolicyRunnerCfg):
         lam=0.95,
         desired_kl=0.01,  # only used by schedule="adaptive"
         max_grad_norm=1.0,
-        symmetry_cfg=preset(default=None, symmetry=MIRROR_AUGMENTATION),
+        symmetry_cfg=preset(default=MIRROR_AUGMENTATION, symmetry=MIRROR_AUGMENTATION, no_symmetry=None),
     )
     logger = WriterCfg(class_name="gaitnet_sim.rl.mlflow_writer.MlflowLogWriter", experiment_name="gaitnet")
 

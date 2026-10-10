@@ -17,13 +17,16 @@ class FootstepControlActionCfg(ActionTermCfg):
     class_type: str = "gaitnet_sim.env.actions:FootstepControlAction"
     asset_name: str = "robot"
 
-    controller = preset(default=PooledMpcControllerCfg(), gpu_mpc=BatchedMpcControllerCfg())
+    controller = preset(
+        default=BatchedMpcControllerCfg(), gpu_mpc=BatchedMpcControllerCfg(), cpu_mpc=PooledMpcControllerCfg()
+    )
     """Any controller cfg whose `class_type` implements `LowLevelController`.
 
-    The CPU process pool is the default because it is the controller every bundle and
-    baseline in the repo was produced against. `presets=gpu_mpc` swaps in the batched
-    GPU controller, which runs the same MPC for every robot at once and is what makes
-    large env counts affordable."""
+    The batched GPU controller is the default: it runs the same MPC for every robot at once
+    and is what makes large env counts affordable. `presets=cpu_mpc` swaps in the CPU
+    process pool, the controller older bundles were produced against (a run's
+    `env.controller` MLflow param says which). `gpu_mpc` is kept so older run commands
+    resolve the same."""
     command_name: str = "base_velocity"
     """The command term holding the velocity command before the nudge."""
     apply_nudge: bool = True

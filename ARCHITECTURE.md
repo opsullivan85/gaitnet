@@ -35,8 +35,8 @@ flowchart TB
     core["<b>gaitnet-core</b> (py 3.11) — the hub<br/>state and terrain contract, foothold grid and rules,<br/>samplers, networks, selection, observers,<br/>bundles, PlannerRuntime, control/"]
 
     subgraph ctl["Low-level controllers — both implement LowLevelController,<br/>both run the same convex MPC"]
-        pool["<b>gaitnet-mpc</b> (py 3.11)<br/>one robot per CPU worker<br/><i>default, the reference</i>"]
-        gpu["<b>gaitnet_core.control</b><br/>whole batch on the GPU<br/><i>presets=gpu_mpc</i>"]
+        pool["<b>gaitnet-mpc</b> (py 3.11)<br/>one robot per CPU worker<br/><i>presets=cpu_mpc</i>"]
+        gpu["<b>gaitnet_core.control</b><br/>whole batch on the GPU<br/><i>default</i>"]
     end
 
     sim --> core
@@ -60,7 +60,7 @@ Three things must agree between whoever produced a policy and whoever runs it: t
 | --- | --- | --- |
 | Grid | 25 x 25 cells at 0.015 m per leg, border 3 → 31 x 31 patch, centred 0.08 m outboard of each hip | `gaitnet_sim.env.contract`, the ray patterns in `gaitnet_sim.env.scene`, `TerrainPatch.msg` |
 | Reach band | foothold 0.38 m to 0.12 m below the hip | `valid_footholds` |
-| Edge rule | 0.02 m step between neighbours is an edge; 2 cells of margin | needs `border >= edge_margin + 1` |
+| Edge rule | 0.02 m step between neighbours is an edge; 1 cell of margin | needs `border >= edge_margin + 1` |
 | Leg rule | a leg may lift off only if 2 legs stay in scheduled stance | `eligibility.py` |
 | State vector | 8 features, 52 numbers | `gaitnet_core.features.FEATURES`, chosen by name |
 
@@ -230,9 +230,10 @@ centre; format 2 still loads, its grid centred on the hip.
 
 Both implement `LowLevelController` and run the same convex single-rigid-body MPC, a Bezier
 swing arc and a Cartesian PD through the leg Jacobian.
-`gaitnet_core.control` is a **deliberate copy** of `gaitnet-mpc`, quirks included: every
-bundle, reward weight and evaluation baseline in the repo was produced against the CPU pool,
-so "improving" one silently invalidates the comparisons. Torque agreement, cost per step and
+`gaitnet_core.control` is a **deliberate copy** of `gaitnet-mpc`, quirks included: the reward
+weights and the older bundles and baselines were produced against the CPU pool, newer ones
+against the batched copy (a run's `env.controller` MLflow param says which), so "improving"
+one silently invalidates the comparisons. Torque agreement, cost per step and
 the handful of intentional differences are in
 [control/README.md](packages/gaitnet-core/src/gaitnet_core/control/README.md). Switching
 between them is a sim2real-relevant change, not a pure speed-up.
@@ -243,7 +244,7 @@ re-aimed at it from the hip every step. The world is the base's integrated veloc
 neither controller needs a position estimate. Upstream instead applied the hip-relative target
 at touchdown less a predicted body travel, which the body's turning, tilt and change of speed
 during the swing threw off: feet landed a median 1.5 cm (p99 3.9 cm) from the commanded
-foothold, 7 mm behind it on average, against 1.5 cm cells and a 2-cell edge margin. Pinned,
+foothold, 7 mm behind it on average, against 1.5 cm cells and a 1-cell edge margin. Pinned,
 they land a median 7.0 mm off (p99 3.2 cm) with no systematic bias; what is left is swing
 tracking, worst on the shortest swings. Both were measured on flat ground with
 `gaitnet_sim.scripts.landing_error` (the same bundle, CPU pool, 16 robots for 30 s), which is
@@ -326,24 +327,27 @@ a variant's network and the observation group it reads can't get out of step. Pr
 
 ```bash
 docker compose -f docker/compose.yaml run --rm sim -m gaitnet_sim.scripts.train \
-    --task GaitNet-Pillars --num_envs 1024 presets=spatial,privileged
+    --task GaitNet-Pillars --num_envs 1024 presets=spatial
 ```
 
-The optional observation groups are off by default because RSL-RL keeps every group in its
-rollout buffer.
+The defaults are what MLflow run e37a8f34 trained with: privileged critic, batched GPU MPC
+and mirror augmentation on, each with a preset to turn it back off. Their old opt-in names
+(`privileged`, `gpu_mpc`, `symmetry`) still resolve, to the default, so older run commands
+mean the same thing. The other optional observation groups are off by default because
+RSL-RL keeps every group in its rollout buffer.
 
 | Preset | Switches | For |
 | --- | --- | --- |
-| *(none)* | `CandidateScorer` + `xyz`, groups `state` and `candidates`, CPU MPC pool | the baseline |
+| *(none)* | `CandidateScorer` + `xyz`, groups `state`, `candidates` and `privileged`, critic reads `state` + `privileged`, batched GPU MPC, `SymmetricPPO` | the baseline |
 | [`spatial`](#spatial) | `terrain` group on, actor → `DenseSpatialCNN` | terrain-aware policies |
 | [`crop`](#crop) | `terrain` group on, actor → `CandidateScorer` + `xyz_crop` | cheap terrain awareness |
-| [`privileged`](#privileged) | `privileged` group on, critic reads `state` + `privileged` | better value estimates |
+| [`unprivileged`](#unprivileged) | `privileged` group off, critic reads `state` only | the critic without sim-only inputs |
 | [`slowdown`](#slowdown) | `base_command` group on, actor runs `step_confidence_slowdown` | behaviour feedback outside the policy |
 | [`redirect`](#redirect) | `base_command` and `footholds` groups on, actor runs `blocked_leg_redirect` | steering away from legs short of footholds |
 | `slowdown_redirect` | `base_command` and `footholds` groups on, actor runs both observers | both of the above |
 | [`swing_duration_ablation`](#swing_duration_ablation) | actor → `CandidateScorer` with `fixed_duration=0.25` | does the network need to choose the swing duration? |
-| [`gpu_mpc`](#gpu_mpc) | action term's controller → `BatchedMpcController` | large env counts |
-| [`symmetry`](#symmetry) | PPO → `SymmetricPPO`, `symmetry_cfg` → mirror augmentation | left/right symmetric policies |
+| [`cpu_mpc`](#cpu_mpc) | action term's controller → `PooledMpcController` | comparing against bundles trained on the CPU pool |
+| [`no_symmetry`](#no_symmetry) | `SymmetricPPO` → PPO, `symmetry_cfg` → None | half the update cost, no mirror augmentation |
 
 ### `spatial`
 
@@ -396,22 +400,24 @@ nothing extra. Both networks accept it, but the preset only sets it on the basel
 it collides with `spatial` and `crop` like they do with each other (first wins), so it
 doesn't compose with them yet.
 
-### `privileged`
+### `unprivileged`
 
 | | |
 | --- | --- |
-| Env | `observations.privileged` = `PrivilegedCfg()` |
-| Agent | `obs_groups["critic"]` = `["state", "privileged"]` ([agent_cfg.py:90](packages/gaitnet-sim/src/gaitnet_sim/rl/agent_cfg.py#L90)) |
-| Cost | ~0 |
+| Env | `observations.privileged` = None (default `PrivilegedCfg()`, [env_cfg.py](packages/gaitnet-sim/src/gaitnet_sim/env/env_cfg.py)) |
+| Agent | `obs_groups["critic"]` = `["state"]` (default `["state", "privileged"]`, [agent_cfg.py](packages/gaitnet-sim/src/gaitnet_sim/rl/agent_cfg.py)) |
+| Cost | ~0 either way |
 
-Sim-only inputs for the critic only — the actor's groups are untouched, so a policy trained
-with it deploys unchanged. The group is each leg's terrain averaged to 5 x 5, the fraction of
-valid footholds in each 5 x 5 block, the base's clearance above the terrain, and per-foot
-contact forces. Privileged terms read the *truth*, not the noise-corrupted planner view.
+By default the critic also reads sim-only inputs — the actor's groups are untouched, so a
+policy trained with them deploys unchanged. The group is each leg's terrain averaged to 5 x 5,
+the fraction of valid footholds in each 5 x 5 block, the base's clearance above the terrain,
+and per-foot contact forces. Privileged terms read the *truth*, not the noise-corrupted
+planner view. `unprivileged` turns them off; `eval_sweep`, `play` and `landing_error` drop
+the group, since nothing there reads it.
 
 The critic is a plain 6 x 64 MLP over its groups either way — RSL-RL's own model in training,
 `gaitnet_core.networks.Critic` elsewhere. It never sees candidates: those are i.i.d. draws
-given the state, so they carry ~no information about V(s). `privileged` is the only preset
+given the state, so they carry ~no information about V(s). `unprivileged` is the only preset
 that changes what the value function knows.
 
 ### `slowdown`
@@ -463,33 +469,34 @@ move scores low too.
 
 `slowdown_redirect` runs both observers; their nudges add.
 
-### `gpu_mpc`
+### `cpu_mpc`
 
 | | |
 | --- | --- |
-| Env | `actions.footstep.controller` = `BatchedMpcControllerCfg()` ([actions_cfg.py:20](packages/gaitnet-sim/src/gaitnet_sim/env/actions_cfg.py#L20)) |
+| Env | `actions.footstep.controller` = `PooledMpcControllerCfg()` (default `BatchedMpcControllerCfg()`, [actions_cfg.py:20](packages/gaitnet-sim/src/gaitnet_sim/env/actions_cfg.py#L20)) |
 | Agent | — |
-| Cost | a saving: 6.6 → 5.0 ms per control step at 100 envs, 223 → 36.8 ms at 4096 |
+| Cost | the batched default saves 6.6 → 5.0 ms per control step at 100 envs, 223 → 36.8 ms at 4096 |
 
-Runs the same convex MPC for the whole batch on the GPU instead of one robot per CPU worker.
-This is what makes large env counts affordable; past a few hundred envs, rollouts stop being
-MPC-bound and the GPU policy starts to matter.
+The default runs the convex MPC for the whole batch on the GPU; `cpu_mpc` runs it one robot
+per CPU worker instead. The batched controller is what makes large env counts affordable;
+past a few hundred envs, rollouts stop being MPC-bound and the GPU policy starts to matter.
 
-**Gotcha.** This is a sim2real-relevant change, not a pure speed-up. The two controllers
-agree to well under a percent of joint torque but not exactly, and every bundle and baseline
-in the repo was produced against the CPU pool — compare a policy trained under one against
-the other before trusting a result that crosses them. More solver iterations narrow the gap:
-`presets=gpu_mpc env.actions.footstep.controller.solver_iterations=100`.
+**Gotcha.** Switching is a sim2real-relevant change, not a pure speed-up. The two controllers
+agree to well under a percent of joint torque but not exactly, and older bundles and
+baselines were produced against the CPU pool (a run's `env.controller` MLflow param says
+which) — compare a policy trained under
+one against the other before trusting a result that crosses them. More solver iterations
+narrow the gap: `env.actions.footstep.controller.solver_iterations=100`.
 
-### `symmetry`
+### `no_symmetry`
 
 | | |
 | --- | --- |
-| Agent | `algorithm.class_name` = `SymmetricPPO`, `algorithm.symmetry_cfg` = `MIRROR_AUGMENTATION` ([agent_cfg.py](packages/gaitnet-sim/src/gaitnet_sim/rl/agent_cfg.py)) |
-| Cost | PPO's update doubles: 7.3 → 14.7 s per iteration with the default scorer, 29.6 → 59.7 s with `spatial` (512 envs x 250 steps); a whole `gpu_mpc,privileged` iteration 40.3 → 47.7 s |
+| Agent | `algorithm.class_name` = `"PPO"`, `algorithm.symmetry_cfg` = None (default `SymmetricPPO` and `MIRROR_AUGMENTATION`, [agent_cfg.py](packages/gaitnet-sim/src/gaitnet_sim/rl/agent_cfg.py)) |
+| Cost | augmentation doubles PPO's update: 7.3 → 14.7 s per iteration with the default scorer, 29.6 → 59.7 s with `spatial` (512 envs x 250 steps); a whole iteration with the batched MPC and the privileged critic 40.3 → 47.7 s. `no_symmetry` takes that back |
 
-The robot and task are symmetric under the mirror y → -y with FL ↔ FR and RL ↔ RR, and
-RSL-RL's symmetry extension (Mittal et al., ICRA 2024) exploits it by appending each PPO
+By default PPO trains with mirror augmentation. The robot and task are symmetric under the
+mirror y → -y with FL ↔ FR and RL ↔ RR, and RSL-RL's symmetry extension (Mittal et al., ICRA 2024) exploits it by appending each PPO
 minibatch's mirror image. The mirrored half reuses the original's advantages, returns and
 old log-probabilities, so it only makes sense because the environment's dynamics and
 rewards are symmetric too.
@@ -519,7 +526,7 @@ Go1's knees all bend backwards, so it isn't front/back symmetric.
 ### Composing and overriding
 
 Presets are resolved by name across every `preset(...)` field, so ones that touch disjoint
-fields compose freely: `presets=spatial,privileged,gpu_mpc` is the large-scale terrain-aware
+fields compose freely: `presets=spatial` on top of the defaults is the large-scale terrain-aware
 setup. Only `spatial` and `crop` collide.
 
 A field that *is* a preset (`agent.actor.network`, `agent.actor.observers`,

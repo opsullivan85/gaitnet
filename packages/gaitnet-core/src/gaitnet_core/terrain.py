@@ -25,7 +25,7 @@ def valid_footholds(
     spec: RobotSpec,
     grid: FootholdGrid,
     step_threshold: float = 0.02,
-    edge_margin: int = 2,
+    edge_margin: int = 1,
 ) -> torch.Tensor:
     """Cells within the leg's reach and at least `edge_margin` cells from any height step.
 
@@ -57,7 +57,7 @@ def reachable_cells(heights: torch.Tensor, spec: RobotSpec, grid: FootholdGrid) 
 
 
 def away_from_edges(
-    heights: torch.Tensor, grid: FootholdGrid, step_threshold: float = 0.02, edge_margin: int = 2
+    heights: torch.Tensor, grid: FootholdGrid, step_threshold: float = 0.02, edge_margin: int = 1
 ) -> torch.Tensor:
     """(N, L, *grid.size) bool, cells more than `edge_margin` cells from any height step. The
     other half of `valid_footholds`; arguments as there."""

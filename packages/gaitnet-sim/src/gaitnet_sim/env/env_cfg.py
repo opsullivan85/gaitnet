@@ -1,7 +1,7 @@
 """GaitNet's manager-based environment configs.
 
 A stock `ManagerBasedRLEnv` runs these; nothing is subclassed. Experiments change them
-with Isaac Lab presets (`presets=spatial,privileged`, which switch on the observation
+with Isaac Lab presets (`presets=spatial`, which switch on the observation
 groups those variants read, together with the agent cfg's matching parts) or overrides,
 e.g. `"env.observations.state.robot_state.params.features=['foot_pos','command']"` for the
 state vector or `env.observations.candidates.candidates.params.sampler=dense` for the
@@ -73,12 +73,14 @@ class ObservationsCfg:
     state: StateCfg = StateCfg()
     candidates: CandidatesCfg = CandidatesCfg()
 
-    # Optional groups, off unless a preset needs them: RSL-RL keeps every group in its
-    # rollout buffer, and terrain patches alone cost ~4 GB at 1024 envs x 250 steps.
+    # Optional groups, off unless a preset needs them (privileged aside, which is small):
+    # RSL-RL keeps every group in its rollout buffer, and terrain patches alone cost ~4 GB
+    # at 1024 envs x 250 steps.
     terrain = preset(default=None, spatial=TerrainCfg(), crop=TerrainCfg())
     """For actors whose networks read terrain (the dense spatial CNN, the crop encoder)."""
-    privileged = preset(default=None, privileged=PrivilegedCfg())
-    """For the privileged critic."""
+    privileged = preset(default=PrivilegedCfg(), privileged=PrivilegedCfg(), unprivileged=None)
+    """For the privileged critic, on by default. `privileged` is kept so older run commands
+    resolve the same."""
     base_command = preset(
         default=None, slowdown=BaseCommandCfg(), redirect=BaseCommandCfg(), slowdown_redirect=BaseCommandCfg()
     )
@@ -92,8 +94,8 @@ class ActionsCfg:
     footstep = FootstepControlActionCfg()
 
 
-_MAX_XY_VELOCITY = 0.2
-_MAX_YAW_RATE = 0.4
+_MAX_XY_VELOCITY = 0.3
+_MAX_YAW_RATE = 0.5
 
 
 @configclass
@@ -211,7 +213,7 @@ class GaitNetEnvCfg(ManagerBasedRLEnvCfg):
     """Everything but the terrain type, which the task variants below choose."""
 
     gaitnet: GaitNetCfg = GaitNetCfg()
-    scene: GaitNetSceneCfg = GaitNetSceneCfg(num_envs=1024, env_spacing=2.5)
+    scene: GaitNetSceneCfg = GaitNetSceneCfg(num_envs=512, env_spacing=2.5)
     observations: ObservationsCfg = ObservationsCfg()
     actions: ActionsCfg = ActionsCfg()
     commands: CommandsCfg = CommandsCfg()

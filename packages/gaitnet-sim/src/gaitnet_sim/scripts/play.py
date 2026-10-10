@@ -109,6 +109,7 @@ def main() -> int:
     # the planner samples its own candidates from the terrain scan
     env_cfg.observations.candidates = None
     env_cfg.observations.terrain = None
+    env_cfg.observations.privileged = None  # the critic's, nothing here reads it
 
     env = ManagerBasedRLEnv(cfg=env_cfg)
     robot = IsaacRobot(env)

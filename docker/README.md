@@ -51,8 +51,8 @@ docker compose -f docker/compose.yaml run --rm sim -m gaitnet_sim.scripts.walk -
 # train (tasks GaitNet-Holes, GaitNet-Pillars and GaitNet-HoledPillars; Isaac Lab's train entry point, so
 # --max_iterations, --seed, --checkpoint, ..., presets and overrides such as
 # agent.algorithm.entropy_coef=0.01 all work; see packages/gaitnet-sim/README.md)
-docker compose -f docker/compose.yaml run --rm sim -m gaitnet_sim.scripts.train --task GaitNet-Holes --num_envs 1024
-docker compose -f docker/compose.yaml run --rm sim -m gaitnet_sim.scripts.train --task GaitNet-Pillars presets=spatial,privileged
+docker compose -f docker/compose.yaml run --rm sim -m gaitnet_sim.scripts.train --task GaitNet-Holes --num_envs 512
+docker compose -f docker/compose.yaml run --rm sim -m gaitnet_sim.scripts.train --task GaitNet-Pillars presets=spatial
 
 # a policy bundle from a run, by directory or MLflow run id
 docker compose -f docker/compose.yaml run --rm sim -m gaitnet_sim.scripts.export_bundle \

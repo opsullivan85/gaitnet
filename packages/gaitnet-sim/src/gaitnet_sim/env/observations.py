@@ -12,7 +12,7 @@ The policy's groups read the action term's `planner_observation()`, which carrie
 observation noise; privileged terms read the truth.
 
 Every term also needs a left/right mirror in `gaitnet_sim.rl.symmetry.TERM_MIRRORS`, which
-symmetry-augmented training (`presets=symmetry`) applies to every group.
+symmetry-augmented training (the default, off with `presets=no_symmetry`) applies to every group.
 """
 
 from __future__ import annotations

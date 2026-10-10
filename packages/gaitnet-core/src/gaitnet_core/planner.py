@@ -26,7 +26,7 @@ class FootholdRules:
 
     step_threshold: float = 0.02
     """Height difference between neighbouring cells that counts as an edge (m)."""
-    edge_margin: int = 2
+    edge_margin: int = 1
     """Cells within this many cells of an edge are invalid."""
     min_stance_after_step: int = 2
     """A leg may only lift off if this many legs stay in stance."""

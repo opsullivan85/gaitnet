@@ -1,7 +1,7 @@
 """Measure how far feet land from the footholds a policy commands.
 
     python -m gaitnet_sim.scripts.landing_error --bundle bundle.pt --num_envs 16
-    python -m gaitnet_sim.scripts.landing_error --bundle bundle.pt --difficulty 0.5 presets=gpu_mpc
+    python -m gaitnet_sim.scripts.landing_error --bundle bundle.pt --difficulty 0.5 presets=cpu_mpc
     python -m gaitnet_sim.scripts.landing_error --bundle bundle.pt \\
         env.commands.base_velocity.ranges.ang_vel_z=[0.0,0.0]
 
@@ -80,6 +80,7 @@ def main() -> int:
     # the planner samples its own candidates from the terrain scan
     env_cfg.observations.candidates = None
     env_cfg.observations.terrain = None
+    env_cfg.observations.privileged = None  # the critic's, nothing here reads it
     controller_cfg = env_cfg.actions.footstep.controller
     logger.info(f"controller: {type(controller_cfg).__name__}")
 

@@ -42,20 +42,20 @@
             "label": "Run: eval sweep",
             "detail": "Full sweep, recorded in MLflow under the bundle's training run.",
             "type": "shell",
-            "command": "V=\"${input:evalVelocities}\"; docker compose -f docker/compose.yaml run --rm ${input:livestream} -m gaitnet_sim.scripts.eval_sweep --bundle ${input:bundlePath} --task ${input:evalTask} ${input:evalVariant} --mlflow_run=${input:mlflowRunOverride} ${=${V:+--velocities $V}} presets=gpu_mpc"
+            "command": "V=\"${input:evalVelocities}\"; docker compose -f docker/compose.yaml run --rm ${input:livestream} -m gaitnet_sim.scripts.eval_sweep --bundle ${input:bundlePath} --task ${input:evalTask} ${input:evalVariant} --mlflow_run=${input:mlflowRunOverride} ${=${V:+--velocities $V}}"
         },
         {
             "label": "Run: eval sweep (quick check)",
             "detail": "2 difficulties x 1 velocity x 8 robots: does the eval and its MLflow logging work at all.",
             "type": "shell",
-            "command": "docker compose -f docker/compose.yaml run --rm ${input:livestream} -m gaitnet_sim.scripts.eval_sweep --bundle ${input:bundlePath} --task ${input:evalTask} ${input:evalVariant} --mlflow_run=${input:mlflowRunOverride} --difficulties 0 0.2 --velocities 0.1 --envs_per_difficulty 8 --terrain_length 2.0 presets=gpu_mpc"
+            "command": "docker compose -f docker/compose.yaml run --rm ${input:livestream} -m gaitnet_sim.scripts.eval_sweep --bundle ${input:bundlePath} --task ${input:evalTask} ${input:evalVariant} --mlflow_run=${input:mlflowRunOverride} --difficulties 0 0.2 --velocities 0.1 --envs_per_difficulty 8 --terrain_length 2.0"
         },
         {
             "label": "Watch: policy (livestreamed)",
             "detail": "16 robots on eval or training terrain; open http://localhost:8210 in Chrome/Chromium once the env is stepping.",
             "type": "shell",
             "dependsOn": "Run: web viewer (for livestreamed runs)",
-            "command": "docker compose -f docker/compose.yaml run --rm sim-livestream -m ${input:watchTerrain} --bundle ${input:bundlePath} --task ${input:evalTask} presets=gpu_mpc"
+            "command": "docker compose -f docker/compose.yaml run --rm sim-livestream -m ${input:watchTerrain} --bundle ${input:bundlePath} --task ${input:evalTask}"
         },
         {
             "label": "Run: pytest (core, sim, ros1)",
@@ -137,7 +137,7 @@
             "type": "pickString",
             "description": "Terrain to train on",
             "options": ["GaitNet-Holes", "GaitNet-Pillars", "GaitNet-HoledPillars"],
-            "default": "GaitNet-Holes"
+            "default": "GaitNet-HoledPillars"
         },
         {
             "id": "trainNumEnvs",
@@ -156,14 +156,14 @@
             "type": "pickString",
             "description": "Presets",
             "options": [
-                { "label": "privileged + gpu_mpc", "value": "presets=privileged,gpu_mpc" },
-                { "label": "swing_duration_ablation + privileged + gpu_mpc", "value": "presets=swing_duration_ablation,privileged,gpu_mpc" },
-                { "label": "spatial + privileged + gpu_mpc", "value": "presets=spatial,privileged,gpu_mpc" },
-                { "label": "spatial + gpu_mpc", "value": "presets=spatial,gpu_mpc" },
-                { "label": "gpu_mpc", "value": "presets=gpu_mpc" },
-                { "label": "none (CPU MPC pool)", "value": "" }
+                { "label": "none (privileged critic, GPU MPC, symmetry)", "value": "" },
+                { "label": "swing_duration_ablation", "value": "presets=swing_duration_ablation" },
+                { "label": "spatial", "value": "presets=spatial" },
+                { "label": "spatial + unprivileged", "value": "presets=spatial,unprivileged" },
+                { "label": "no_symmetry", "value": "presets=no_symmetry" },
+                { "label": "cpu_mpc", "value": "presets=cpu_mpc" }
             ],
-            "default": "presets=privileged,gpu_mpc"
+            "default": ""
         },
         {
             "id": "bundlePath",
@@ -204,7 +204,7 @@
             "type": "pickString",
             "description": "Terrain to sweep",
             "options": ["GaitNet-Holes", "GaitNet-Pillars", "GaitNet-HoledPillars"],
-            "default": "GaitNet-Holes"
+            "default": "GaitNet-HoledPillars"
         },
         {
             "id": "evalVariant",

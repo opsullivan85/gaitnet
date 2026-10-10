@@ -169,7 +169,7 @@ class MlflowLogWriter(SummaryWriter, LogWriter):
         if "scene" in env:
             params["env.num_envs"] = str(env["scene"].get("num_envs"))
         # the preset names alone don't say what they changed; the controller is the part that
-        # matters when comparing runs, and it is only implied by `gpu_mpc`
+        # matters when comparing runs, and it is only implied by `cpu_mpc`
         overrides = _overrides(sys.argv[1:])
         params["presets"] = overrides.pop("presets", "default")
         # the whitelist above leaves most of env out, so what was overridden is logged as typed

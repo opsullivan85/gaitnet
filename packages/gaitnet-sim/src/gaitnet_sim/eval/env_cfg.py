@@ -97,4 +97,5 @@ def make_eval_env_cfg(
     # the planner samples its own candidates from the terrain scan
     env_cfg.observations.candidates = None
     env_cfg.observations.terrain = None
+    env_cfg.observations.privileged = None  # the critic's, nothing here reads it
     return env_cfg

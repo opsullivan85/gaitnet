@@ -8,7 +8,8 @@ for `gaitnet_sim.controllers.PooledMpcController`, which runs the same controlle
 robot per CPU worker.
 
 It exists because rollout collection was bound by that CPU solve, and the bound got
-worse with every environment added. Select it with `presets=gpu_mpc`; see
+worse with every environment added. It is the sim's default; `presets=cpu_mpc` selects
+the CPU pool instead. See
 [packages/gaitnet-sim/README.md](../../../../gaitnet-sim/README.md).
 
 ```

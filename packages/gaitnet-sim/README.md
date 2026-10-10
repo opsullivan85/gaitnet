@@ -23,20 +23,20 @@ compose.
 
 | Preset | Env | Agent | Update cost* |
 | --- | --- | --- | --- |
-| *(none)* | groups `state`, `candidates` | `CandidateScorer`, candidate features `xyz` | 0.44 s |
+| *(none)* | groups `state`, `candidates`, `privileged`; batched GPU MPC | `CandidateScorer`, candidate features `xyz`; the critic reads `state` + `privileged`; `SymmetricPPO` | 0.44 s |
 | `spatial` | + group `terrain` | `DenseSpatialCNN` (D1): a CNN over each leg's height patch, candidates sample its score map | 1.86 s |
 | `crop` | + group `terrain` | `CandidateScorer` with `xyz_crop`: each candidate also sees the 5 x 5 cells of terrain around it | 0.56 s |
-| `privileged` | + group `privileged` (coarse terrain and foothold validity per leg, base clearance, contact forces) | the critic reads `state` + `privileged` | ~0 |
+| `unprivileged` | − group `privileged` (coarse terrain and foothold validity per leg, base clearance, contact forces) | the critic reads `state` only | ~0 |
 | `slowdown` | + group `base_command` | the actor runs the `step_confidence_slowdown` observer while acting | ~0 |
 | `redirect` | + group `base_command`, `footholds` | the actor runs the `blocked_leg_redirect` observer while acting | ~0 |
 | `slowdown_redirect` | + group `base_command`, `footholds` | both observers, nudges summed | ~0 |
 | `swing_duration_ablation` | — | `CandidateScorer` with `fixed_duration=0.25` s: no duration head, the policy is the footstep choice alone | ~0 |
-| `gpu_mpc` | the low-level controller runs batched on the GPU instead of in a CPU process pool | — | ~0 |
-| `symmetry` | — | PPO trains on every minibatch and its left/right mirror image (`SymmetricPPO`) | 2x the network's |
+| `cpu_mpc` | the low-level controller runs in a CPU process pool instead of batched on the GPU | — | ~0 |
+| `no_symmetry` | — | plain PPO, without training on every minibatch's left/right mirror image too | halves it |
 
 \* Forward and backward of the actor on one PPO minibatch (64000 rows, 4 legs x 64
-candidates) on an RTX 5070 Ti; PPO runs 32 per iteration. Without `gpu_mpc`, rollouts are
-dominated by the CPU MPC either way.
+candidates) on an RTX 5070 Ti, before mirror augmentation, which doubles the rows; PPO runs
+32 per iteration. With `cpu_mpc`, rollouts are dominated by the CPU MPC either way.
 
 `spatial` and `crop` both choose the actor network; if both are given, the first wins.
 
@@ -46,8 +46,11 @@ side by side. Keep the two in step when you add or change one.
 
 ```bash
 docker compose -f docker/compose.yaml run --rm sim -m gaitnet_sim.scripts.train \
-    --task GaitNet-Pillars --num_envs 1024 presets=spatial,privileged
+    --task GaitNet-Pillars --num_envs 1024 presets=spatial
 ```
+
+The defaults are what MLflow run e37a8f34 trained with. The old opt-in names `privileged`,
+`gpu_mpc` and `symmetry` still resolve, to the defaults, so older run commands mean the same.
 
 The `terrain` group costs ~4 GB of rollout storage at 1024 envs x 250 steps, which is why
 it is off unless a preset reads it.
@@ -59,8 +62,8 @@ torques. Two implement it, running the same convex MPC for the same robot:
 
 | Cfg | Where it runs | Use it for |
 | --- | --- | --- |
-| `PooledMpcControllerCfg` *(default)* | `gaitnet_mpc`, one robot per CPU worker | the reference: every bundle and baseline in this repo was produced against it |
-| `BatchedMpcControllerCfg` (`presets=gpu_mpc`) | `gaitnet_core.control`, the whole batch on the GPU | anything past a few hundred envs |
+| `BatchedMpcControllerCfg` *(default)* | `gaitnet_core.control`, the whole batch on the GPU | anything past a few hundred envs |
+| `PooledMpcControllerCfg` (`presets=cpu_mpc`) | `gaitnet_mpc`, one robot per CPU worker | the reference for older bundles and baselines (a run's `env.controller` MLflow param says which it used) |
 
 The CPU pool costs about 6.6 ms per physics step at 100 envs and 223 ms at 4096, roughly
 linear once past the core count. The batched one costs 5.0 ms and 36.8 ms, so it is worth
@@ -71,10 +74,10 @@ the accuracy against solver budget, and the handful of deliberate differences ar
 
 ```bash
 docker compose -f docker/compose.yaml run --rm sim -m gaitnet_sim.scripts.train \
-    --task GaitNet-Pillars --num_envs 4096 presets=gpu_mpc,privileged
+    --task GaitNet-Pillars --num_envs 4096
 
 # more solver iterations per MPC solve: closer to the CPU controller, slower
-presets=gpu_mpc env.actions.footstep.controller.solver_iterations=100
+env.actions.footstep.controller.solver_iterations=100
 ```
 
 Switching controllers is a sim2real-relevant change, not a pure speed-up: the two agree
@@ -100,28 +103,28 @@ observers, and `eval_sweep` runs them unless given `--no_observers`.
 
 ### Left/right symmetry
 
-`presets=symmetry` is RSL-RL's symmetry augmentation (Mittal et al., ICRA 2024): each PPO
-minibatch is followed by its mirror image, with left and right legs swapped, y negated and
-each choice moved to the mirrored candidate, and both halves train the actor and critic.
-The mirror of every observation term is in `gaitnet_sim.rl.symmetry.TERM_MIRRORS`, built on
-`gaitnet_core.symmetry`; a new term needs one there. It composes with every other preset,
-and bundles and deployment are unaffected.
+Training uses RSL-RL's symmetry augmentation (Mittal et al., ICRA 2024) by default, off with
+`presets=no_symmetry`: each PPO minibatch is followed by its mirror image, with left and
+right legs swapped, y negated and each choice moved to the mirrored candidate, and both
+halves train the actor and critic. The mirror of every observation term is in
+`gaitnet_sim.rl.symmetry.TERM_MIRRORS`, built on `gaitnet_core.symmetry`; a new term needs
+one there. It composes with every other preset, and bundles and deployment are unaffected.
 
 It logs `symmetry`: the KL between the mirrored policy and the policy at the mirrored
-observation, 0 for a perfectly symmetric policy. Variants, by override of the preset's keys:
+observation, 0 for a perfectly symmetric policy. Variants, by override of its keys:
 
 ```bash
-# only the metric, training unchanged (costs one no-grad actor pass per minibatch)
-presets=symmetry agent.algorithm.symmetry_cfg.use_data_augmentation=False
+# only the metric, training otherwise as with no_symmetry (costs one no-grad actor pass per minibatch)
+agent.algorithm.symmetry_cfg.use_data_augmentation=False
 
 # also the mirror loss, that KL added to PPO's loss
-presets=symmetry agent.algorithm.symmetry_cfg.use_mirror_loss=True agent.algorithm.symmetry_cfg.mirror_loss_coeff=0.1
+agent.algorithm.symmetry_cfg.use_mirror_loss=True agent.algorithm.symmetry_cfg.mirror_loss_coeff=0.1
 ```
 
 Augmentation doubles every minibatch, so it doubles PPO's update: 7.3 → 14.7 s per
 iteration for the default scorer, 29.6 → 59.7 s for `spatial` (512 envs x 250 steps, RTX
-5070 Ti), and 0.5 and 1.9 GiB more peak memory. Collection is untouched, so a
-`presets=gpu_mpc,privileged` iteration at 512 envs goes 40.3 → 47.7 s. The metric alone adds
+5070 Ti), and 0.5 and 1.9 GiB more peak memory. Collection is untouched, so an iteration
+with the batched MPC and privileged critic at 512 envs goes 40.3 → 47.7 s. The metric alone adds
 2.1 s (7.1 s with `spatial`) to the update, and the mirror loss ~0.04 s on top of
 augmentation.
 
@@ -140,7 +143,7 @@ env.observations.candidates.candidates.params.sampler=uniform_lattice
 env.observations.candidates.candidates.params.sampler_kwargs.per_leg=32
 
 # foothold rules
-env.gaitnet.min_stance_after_step=3 env.gaitnet.edge_margin=1
+env.gaitnet.min_stance_after_step=3 env.gaitnet.edge_margin=2
 
 # rewards
 env.rewards.step_taken.weight=-0.2 env.rewards.xy_tracking.params.command=base
@@ -230,7 +233,7 @@ control rate ([eval/landing.py](src/gaitnet_sim/eval/landing.py)): the commanded
 fixed in the world at the command, and the foot at first contact, at the scheduled touchdown
 and 40 ms later. It prints the error's size and its bias along and across the heading, and
 writes one row per footstep to `logs/landing/`. Pass presets and overrides as usual, e.g.
-`presets=gpu_mpc` or `env.commands.base_velocity.ranges.ang_vel_z=[0.0,0.0]`.
+`presets=cpu_mpc` or `env.commands.base_velocity.ranges.ang_vel_z=[0.0,0.0]`.
 
 ## Watching the planner
 

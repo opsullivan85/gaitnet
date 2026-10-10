@@ -11,8 +11,8 @@ env: every observation group is mirrored term by term (`TERM_MIRRORS`, built on
 RSL-RL's mirror loss, and the `symmetry` metric it logs, compare the actor's outputs by MSE.
 `GaitNetActor`'s outputs are encoded choices, not a distribution, so `MirrorSymmetry`
 replaces it with the KL between the mirrored policy and the policy at the mirrored
-observation, and `SymmetricPPO` is PPO with that in place. The `symmetry` preset
-(`gaitnet_sim.rl.agent_cfg`) selects both.
+observation, and `SymmetricPPO` is PPO with that in place. The agent cfg
+(`gaitnet_sim.rl.agent_cfg`) selects both by default, `presets=no_symmetry` neither.
 """
 
 from __future__ import annotations
